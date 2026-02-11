@@ -7,8 +7,6 @@ export function Login() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  // Inside your handleLogin function:
-
 const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     console.log("1. Form submitted") // <--- Add this
