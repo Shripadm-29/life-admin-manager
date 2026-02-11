@@ -1,30 +1,35 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router';
-import { useAuth } from '@/app/context/AuthContext';
+import { useState } from 'react'
+import { useNavigate, Link } from 'react-router-dom' // Standard React routing
+import { supabase } from '../../lib/supabaseClient'
 
 export function Login() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const { login } = useAuth();
-  const navigate = useNavigate();
+  const navigate = useNavigate()
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    
-    if (!email || !password) {
-      setError('Please fill in all fields');
-      return;
-    }
+  // Inside your handleLogin function:
 
-    const success = login(email, password);
-    if (success) {
-      navigate('/dashboard');
+const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    console.log("1. Form submitted") // <--- Add this
+
+    const formData = new FormData(e.currentTarget)
+    const email = formData.get('email') as string
+    const password = formData.get('password') as string
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
+
+    if (error) {
+      console.log("2. Login Error:", error.message) // <--- Add this
+      setError(error.message)
     } else {
-      setError('Invalid credentials');
+      console.log("3. Success! Redirecting to /dashboard...") // <--- Add this
+      navigate('/dashboard')
     }
-  };
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -34,48 +39,30 @@ export function Login() {
           <p className="mt-2 text-center text-gray-600">Sign in to your account</p>
         </div>
         
-        <form onSubmit={handleSubmit} className="mt-8 space-y-6">
+        <form onSubmit={handleLogin} className="mt-8 space-y-6">
           {error && (
-            <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm">
+            <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm text-center">
               {error}
             </div>
           )}
           
           <div className="space-y-4">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="you@example.com"
-              />
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input name="email" type="email" required className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"/>
             </div>
             
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="••••••••"
-              />
+              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+              <input name="password" type="password" required className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"/>
             </div>
           </div>
 
           <button
-            type="submit"
-            className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors"
+            disabled={loading}
+            className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors disabled:opacity-50"
           >
-            Login
+            {loading ? 'Logging in...' : 'Login'}
           </button>
 
           <p className="text-center text-sm text-gray-600">
@@ -87,5 +74,5 @@ export function Login() {
         </form>
       </div>
     </div>
-  );
+  )
 }
