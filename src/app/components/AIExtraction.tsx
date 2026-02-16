@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router';
 import { Navigation } from '@/app/components/Navigation';
 import { useAuth } from '@/app/context/AuthContext';
 import { ArrowLeft, CheckCircle, Edit2 } from 'lucide-react';
+import { StatusMessage } from '@/app/components/ui/status-message';
 
 export function AIExtraction() {
   const { user } = useAuth();
@@ -13,6 +14,9 @@ export function AIExtraction() {
   const [extractedTitle, setExtractedTitle] = useState('');
   const [extractedDate, setExtractedDate] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -21,7 +25,8 @@ export function AIExtraction() {
     }
 
     // Simulate AI extraction
-    setTimeout(() => {
+    setLoading(true);
+    const t = setTimeout(() => {
       // Mock extracted data based on filename
       if (filename.toLowerCase().includes('assignment')) {
         setExtractedTitle('Complete Assignment 3 - Data Structures');
@@ -36,15 +41,45 @@ export function AIExtraction() {
         setExtractedTitle('Review Document: ' + filename);
         setExtractedDate('2026-02-20');
       }
+      setLoading(false);
     }, 1000);
+
+    return () => clearTimeout(t);
   }, [user, navigate, filename]);
 
   if (!user) return null;
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navigation />
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="bg-white rounded-lg shadow">
+            <div className="p-8 text-center text-gray-500">
+              <p className="animate-pulse">Extracting information from the document...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const handleConfirm = () => {
-    // In a real app, this would create the task and link the document
-    console.log('Creating task:', { title: extractedTitle, dueDate: extractedDate });
-    navigate('/documents');
+    setActionLoading(true);
+    setError(null);
+    // Simulate API call
+    const t = setTimeout(() => {
+      try {
+        console.log('Creating task:', { title: extractedTitle, dueDate: extractedDate });
+        navigate('/documents');
+      } catch (e) {
+        setError('Failed to create task.');
+      } finally {
+        setActionLoading(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(t);
   };
 
   const handleEdit = () => {
@@ -56,6 +91,17 @@ export function AIExtraction() {
       } 
     });
   };
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navigation />
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <StatusMessage variant="error" message={error} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -136,21 +182,24 @@ export function AIExtraction() {
             <div className="flex justify-end gap-3 pt-4">
               <button
                 onClick={() => navigate('/documents')}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+                disabled={actionLoading}
+                className={`px-4 py-2 border border-gray-300 text-gray-700 rounded-md transition-colors ${actionLoading ? 'opacity-50 pointer-events-none' : 'hover:bg-gray-50'}`}
               >
                 Cancel
               </button>
               <button
                 onClick={handleEdit}
-                className="px-4 py-2 border border-blue-600 text-blue-600 rounded-md hover:bg-blue-50 transition-colors"
+                disabled={actionLoading}
+                className={`px-4 py-2 border border-blue-600 text-blue-600 rounded-md transition-colors ${actionLoading ? 'opacity-50 pointer-events-none' : 'hover:bg-blue-50'}`}
               >
                 Edit Full Task
               </button>
               <button
                 onClick={handleConfirm}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                disabled={actionLoading}
+                className={`px-4 py-2 bg-blue-600 text-white rounded-md transition-colors ${actionLoading ? 'opacity-50 pointer-events-none' : 'hover:bg-blue-700'}`}
               >
-                Confirm & Create Task
+                {actionLoading ? 'Creating…' : 'Confirm & Create Task'}
               </button>
             </div>
           </div>

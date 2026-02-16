@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { Navigation } from '@/app/components/Navigation';
 import { useAuth } from '@/app/context/AuthContext';
 import { mockDocuments, mockTasks } from '@/app/data/mockData';
+import { StatusMessage } from '@/app/components/ui/status-message';
 import { Document } from '@/app/types';
 import { Upload, FileText, Link as LinkIcon, Calendar } from 'lucide-react';
 
@@ -10,13 +11,28 @@ export function DocumentsPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [documents, setDocuments] = useState<Document[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (!user) {
       navigate('/login');
       return;
     }
-    setDocuments(mockDocuments);
+    setLoading(true);
+    setError(null);
+    const t = setTimeout(() => {
+      try {
+        setDocuments(mockDocuments);
+      } catch (e) {
+        setError('Failed to load documents.');
+      } finally {
+        setLoading(false);
+      }
+    }, 250);
+
+    return () => clearTimeout(t);
   }, [user, navigate]);
 
   if (!user) return null;
@@ -34,8 +50,20 @@ export function DocumentsPage() {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Simulate AI extraction
-      navigate('/documents/extract', { state: { filename: file.name } });
+      setUploading(true);
+      setError(null);
+      // Simulate upload + AI extraction
+      const t = setTimeout(() => {
+        try {
+          navigate('/documents/extract', { state: { filename: file.name } });
+        } catch (err) {
+          setError('Failed to upload document.');
+        } finally {
+          setUploading(false);
+        }
+      }, 400);
+
+      return () => clearTimeout(t);
     }
   };
 
@@ -50,7 +78,7 @@ export function DocumentsPage() {
               <h2 className="text-2xl font-bold text-gray-900">Documents</h2>
               <p className="text-gray-600">Upload and manage your documents</p>
             </div>
-            <label className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors cursor-pointer">
+            <label className={`inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md transition-colors cursor-pointer ${loading || uploading ? 'opacity-50 pointer-events-none' : 'hover:bg-blue-700'}`}>
               <Upload className="w-4 h-4 mr-2" />
               Upload Document
               <input
@@ -58,18 +86,27 @@ export function DocumentsPage() {
                 className="hidden"
                 onChange={handleFileUpload}
                 accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                disabled={loading || uploading}
               />
             </label>
           </div>
         </div>
 
         <div className="bg-white rounded-lg shadow">
-          {documents.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
-              <FileText className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-              <p>No documents uploaded yet.</p>
-              <p className="text-sm mt-1">Upload a document to get started.</p>
-            </div>
+          {error ? (
+            <StatusMessage variant="error" message={error} />
+          ) : loading ? (
+            <StatusMessage
+              variant="loading"
+              message="Loading documents..."
+              icon={<FileText className="w-12 h-12 mx-auto mb-3 text-gray-400" />}
+            />
+          ) : documents.length === 0 ? (
+            <StatusMessage
+              variant="empty"
+              message="No documents uploaded yet."
+              icon={<FileText className="w-12 h-12 mx-auto mb-3 text-gray-400" />}
+            />
           ) : (
             <div className="divide-y divide-gray-200">
               {documents.map(doc => {
