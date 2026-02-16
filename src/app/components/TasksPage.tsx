@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { Navigation } from '@/app/components/Navigation';
 import { useAuth } from '@/app/context/AuthContext';
 import { mockTasks } from '@/app/data/mockData';
+import { StatusMessage } from '@/app/components/ui/status-message';
 import { Task } from '@/app/types';
 import { Plus, Search, Filter } from 'lucide-react';
 
@@ -10,6 +11,9 @@ export function TasksPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
@@ -19,7 +23,21 @@ export function TasksPage() {
       navigate('/login');
       return;
     }
-    setTasks(mockTasks);
+    // Simulate async fetch so we can show a loading state
+    setLoading(true);
+    setError(null);
+    const t = setTimeout(() => {
+      try {
+        // replace with real fetch in future
+        setTasks(mockTasks);
+      } catch (e) {
+        setError('Failed to load tasks.');
+      } finally {
+        setLoading(false);
+      }
+    }, 250);
+
+    return () => clearTimeout(t);
   }, [user, navigate]);
 
   if (!user) return null;
@@ -123,10 +141,15 @@ export function TasksPage() {
         </div>
 
         <div className="bg-white rounded-lg shadow">
-          {filteredTasks.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
-              <p>No tasks found. Try adjusting your filters or add a new task.</p>
-            </div>
+          <div aria-live="polite" className="sr-only" />
+          {error ? (
+            <StatusMessage variant="error" message={error} />
+          ) : loading ? (
+            <StatusMessage variant="loading" message="Loading tasks..." />
+          ) : tasks.length === 0 ? (
+            <StatusMessage variant="empty" message={'No tasks yet. Click "Add Task" to create your first task.'} />
+          ) : filteredTasks.length === 0 ? (
+            <StatusMessage variant="filtered" message="No tasks match your search or filters. Try clearing filters." />
           ) : (
             <div className="divide-y divide-gray-200">
               {filteredTasks.map(task => (
@@ -138,8 +161,16 @@ export function TasksPage() {
                     <input
                       type="checkbox"
                       checked={task.completed}
-                      onChange={() => toggleComplete(task.id)}
-                      className="mt-1 w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                      onChange={() => {
+                        if (loading || actionLoading) return;
+                        setActionLoading(task.id);
+                        setTimeout(() => {
+                          toggleComplete(task.id);
+                          setActionLoading(null);
+                        }, 200);
+                      }}
+                      disabled={!!actionLoading || loading}
+                      className="mt-1 w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                     />
                     
                     <div className="flex-1">
@@ -168,7 +199,8 @@ export function TasksPage() {
 
                     <button
                       onClick={() => navigate(`/tasks/${task.id}/edit`)}
-                      className="px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                      disabled={loading || !!actionLoading}
+                      className={`px-3 py-1 text-sm text-blue-600 rounded-md transition-colors ${loading || actionLoading ? 'opacity-50 pointer-events-none' : 'hover:bg-blue-50'}`}
                     >
                       Edit
                     </button>

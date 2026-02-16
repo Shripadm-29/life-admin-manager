@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { Navigation } from '@/app/components/Navigation';
 import { useAuth } from '@/app/context/AuthContext';
 import { mockReminders } from '@/app/data/mockData';
+import { StatusMessage } from '@/app/components/ui/status-message';
 import { Reminder } from '@/app/types';
 import { Bell, Calendar, CheckCircle, Clock } from 'lucide-react';
 
@@ -10,13 +11,27 @@ export function RemindersPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) {
       navigate('/login');
       return;
     }
-    setReminders(mockReminders);
+    setLoading(true);
+    setError(null);
+    const t = setTimeout(() => {
+      try {
+        setReminders(mockReminders);
+      } catch (e) {
+        setError('Failed to load reminders.');
+      } finally {
+        setLoading(false);
+      }
+    }, 250);
+
+    return () => clearTimeout(t);
   }, [user, navigate]);
 
   if (!user) return null;
@@ -133,13 +148,21 @@ export function RemindersPage() {
           </div>
         )}
 
-        {reminders.length === 0 && (
-          <div className="bg-white rounded-lg shadow p-8 text-center">
-            <Bell className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-            <p className="text-gray-500">No reminders set up yet.</p>
-            <p className="text-sm text-gray-400 mt-1">Reminders are automatically created for your tasks.</p>
-          </div>
-        )}
+        {error ? (
+          <StatusMessage variant="error" message={error} icon={<Bell className="w-12 h-12 mx-auto mb-3 text-gray-400" />} />
+        ) : loading ? (
+          <StatusMessage
+            variant="loading"
+            message="Loading reminders..."
+            icon={<Bell className="w-12 h-12 mx-auto mb-3 text-gray-400" />}
+          />
+        ) : reminders.length === 0 ? (
+          <StatusMessage
+            variant="empty"
+            message="No reminders set up yet."
+            icon={<Bell className="w-12 h-12 mx-auto mb-3 text-gray-400" />}
+          />
+        ) : null}
       </div>
     </div>
   );
