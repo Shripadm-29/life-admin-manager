@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { Navigation } from '@/app/components/Navigation';
 import { useAuth } from '@/app/context/AuthContext';
 import { mockTasks } from '@/app/data/mockData';
+import { StatusMessage } from '@/app/components/ui/status-message';
 import { Task } from '@/app/types';
 import { Plus, AlertCircle, Clock } from 'lucide-react';
 
@@ -10,13 +11,27 @@ export function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) {
       navigate('/login');
       return;
     }
-    setTasks(mockTasks);
+    setLoading(true);
+    setError(null);
+    const t = setTimeout(() => {
+      try {
+        setTasks(mockTasks);
+      } catch (e) {
+        setError('Failed to load dashboard data.');
+      } finally {
+        setLoading(false);
+      }
+    }, 250);
+
+    return () => clearTimeout(t);
   }, [user, navigate]);
 
   if (!user) return null;
@@ -116,23 +131,27 @@ export function Dashboard() {
         )}
 
         <div className="bg-white rounded-lg shadow">
-          <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-900">Upcoming Tasks</h3>
-            <button
-              onClick={() => navigate('/tasks/new')}
-              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Task
-            </button>
-          </div>
-
-          {upcomingTasks.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
-              <p>No upcoming tasks. You're all caught up!</p>
-            </div>
+          {error ? (
+            <StatusMessage variant="error" message={error} />
+          ) : loading ? (
+            <StatusMessage variant="loading" message="Loading dashboard..." />
           ) : (
-            <div className="divide-y divide-gray-200">
+            <>
+              <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Upcoming Tasks</h3>
+                <button
+                  onClick={() => navigate('/tasks/new')}
+                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Task
+                </button>
+              </div>
+
+              {upcomingTasks.length === 0 ? (
+                <StatusMessage variant="empty" message="No upcoming tasks. You're all caught up!" />
+              ) : (
+                <div className="divide-y divide-gray-200">
               {upcomingTasks.map(task => (
                 <div key={task.id} className="p-6 hover:bg-gray-50 transition-colors">
                   <div className="flex items-start justify-between">
@@ -164,6 +183,9 @@ export function Dashboard() {
               View all tasks →
             </button>
           </div>
+            </>
+          )}
+
         </div>
       </div>
     </div>
