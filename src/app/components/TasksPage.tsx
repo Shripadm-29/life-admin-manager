@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { Navigation } from '@/app/components/Navigation';
 import { useAuth } from '@/app/context/AuthContext';
-import { mockTasks } from '@/app/data/mockData';
+import { supabase } from '@/lib/supabaseClient';
 import { StatusMessage } from '@/app/components/ui/status-message';
 import { Task } from '@/app/types';
 import { Plus, Search, Filter } from 'lucide-react';
@@ -23,22 +23,31 @@ export function TasksPage() {
       navigate('/login');
       return;
     }
-    // Simulate async fetch so we can show a loading state
     setLoading(true);
     setError(null);
-    const t = setTimeout(() => {
-      try {
-        // replace with real fetch in future
-        setTasks(mockTasks);
-      } catch (e) {
+    (async () => {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('user_id', user!.id)
+        .order('due_date', { ascending: true });
+      if (error) {
         setError('Failed to load tasks.');
-      } finally {
-        setLoading(false);
+      } else {
+        const normalized = (data || []).map((d: any) => ({
+          id: d.id,
+          title: d.title,
+          category: d.category,
+          priority: d.priority,
+          dueDate: d.due_date,
+          notes: d.notes || '',
+          completed: d.status === 'completed',
+        }));
+        setTasks(normalized);
       }
-    }, 250);
-
-    return () => clearTimeout(t);
-  }, [user, navigate]);
+      setLoading(false);
+    })();
+    return;  }, [user, navigate]);
 
   if (!user) return null;
 
@@ -68,10 +77,18 @@ export function TasksPage() {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
-  const toggleComplete = (taskId: string) => {
+  const toggleComplete = async (taskId: string, current: boolean) => {
+    // optimistic update
     setTasks(tasks.map(task => 
-      task.id === taskId ? { ...task, completed: !task.completed } : task
+      task.id === taskId ? { ...task, completed: !current } : task
     ));
+    // also persist to supabase
+    const newStatus = current ? 'todo' : 'completed';
+    await supabase
+      .from('tasks')
+      .update({ status: newStatus })
+      .eq('id', taskId)
+      .eq('user_id', user!.id);
   };
 
   return (
@@ -155,7 +172,8 @@ export function TasksPage() {
               {filteredTasks.map(task => (
                 <div 
                   key={task.id} 
-                  className={`p-6 hover:bg-gray-50 transition-colors ${task.completed ? 'opacity-60' : ''}`}
+                  onClick={() => navigate(`/tasks/${task.id}`)}
+                  className={`cursor-pointer p-6 hover:bg-gray-50 transition-colors ${task.completed ? 'opacity-60' : ''}`}
                 >
                   <div className="flex items-start gap-4">
                     <input
@@ -165,7 +183,7 @@ export function TasksPage() {
                         if (loading || actionLoading) return;
                         setActionLoading(task.id);
                         setTimeout(() => {
-                          toggleComplete(task.id);
+                          toggleComplete(task.id, task.completed);
                           setActionLoading(null);
                         }, 200);
                       }}
@@ -198,7 +216,7 @@ export function TasksPage() {
                     </div>
 
                     <button
-                      onClick={() => navigate(`/tasks/${task.id}/edit`)}
+                      onClick={(e) => { e.stopPropagation(); navigate(`/tasks/${task.id}/edit`); }}
                       disabled={loading || !!actionLoading}
                       className={`px-3 py-1 text-sm text-blue-600 rounded-md transition-colors ${loading || actionLoading ? 'opacity-50 pointer-events-none' : 'hover:bg-blue-50'}`}
                     >

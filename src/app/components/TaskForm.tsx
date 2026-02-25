@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useNavigate, useParams, useLocation } from 'react-router';
 import { Navigation } from '@/app/components/Navigation';
 import { useAuth } from '@/app/context/AuthContext';
-import { mockTasks } from '@/app/data/mockData';
+import { supabase } from '@/lib/supabaseClient';
 import { ArrowLeft } from 'lucide-react';
 
 export function TaskForm() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
   const isEdit = Boolean(id);
 
@@ -25,14 +26,27 @@ export function TaskForm() {
     }
 
     if (isEdit && id) {
-      const task = mockTasks.find(t => t.id === id);
-      if (task) {
-        setTitle(task.title);
-        setCategory(task.category);
-        setPriority(task.priority);
-        setDueDate(task.dueDate);
-        setNotes(task.notes);
-      }
+      (async () => {
+        const { data, error } = await supabase
+          .from('tasks')
+          .select('*')
+          .eq('id', id)
+          .eq('user_id', user!.id)
+          .single();
+        if (data) {
+          setTitle(data.title);
+          setCategory(data.category);
+          setPriority(data.priority);
+          setDueDate(data.due_date);
+          setNotes(data.notes || '');
+        }
+      })();
+    } else if (!isEdit) {
+      // check if navigation state provided defaults (from document extraction etc)
+      const state = location.state as any;
+      if (state?.prefillTitle) setTitle(state.prefillTitle);
+      if (state?.prefillDate) setDueDate(state.prefillDate);
+      // we could store linkedDocument in notes or somewhere but skipping for now
     }
   }, [user, navigate, isEdit, id]);
 
@@ -40,7 +54,7 @@ export function TaskForm() {
 
   const categories = ['Academic', 'Finance', 'Career', 'Health', 'Personal', 'Other'];
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -49,9 +63,37 @@ export function TaskForm() {
       return;
     }
 
-    // In a real app, this would save to a database
-    console.log('Saving task:', { title, category, priority, dueDate, notes });
-    navigate('/tasks');
+    try {
+      if (isEdit && id) {
+        await supabase
+          .from('tasks')
+          .update({ title, category, priority, due_date: dueDate, notes })
+          .eq('id', id)
+          .eq('user_id', user!.id);
+        navigate(`/tasks/${id}`);
+      } else {
+        const { data } = await supabase
+          .from('tasks')
+          .insert({
+            title,
+            category,
+            priority,
+            due_date: dueDate,
+            notes,
+            user_id: user!.id,
+          })
+          .select()
+          .single();
+        if (data) {
+          navigate(`/tasks/${data.id}`);
+        } else {
+          navigate('/tasks');
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      setError('Failed to save task.');
+    }
   };
 
   return (

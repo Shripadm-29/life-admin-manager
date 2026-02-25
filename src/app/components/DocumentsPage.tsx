@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { Navigation } from '@/app/components/Navigation';
 import { useAuth } from '@/app/context/AuthContext';
-import { mockDocuments, mockTasks } from '@/app/data/mockData';
+import { supabase } from '@/lib/supabaseClient';
 import { StatusMessage } from '@/app/components/ui/status-message';
 import { Document } from '@/app/types';
 import { Upload, FileText, Link as LinkIcon, Calendar } from 'lucide-react';
@@ -11,6 +11,7 @@ export function DocumentsPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [documents, setDocuments] = useState<Document[]>([]);
+  const [taskMap, setTaskMap] = useState<Record<string,string>>({}); // id -> title
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -22,17 +23,30 @@ export function DocumentsPage() {
     }
     setLoading(true);
     setError(null);
-    const t = setTimeout(() => {
-      try {
-        setDocuments(mockDocuments);
-      } catch (e) {
+    (async () => {
+      const [{ data: docs, error: docsErr }, { data: tasks, error: tasksErr }] = await Promise.all([
+        supabase
+          .from('documents')
+          .select('*')
+          .eq('user_id', user!.id)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('tasks')
+          .select('id,title')
+          .eq('user_id', user!.id),
+      ] as any);
+      if (docsErr) {
         setError('Failed to load documents.');
-      } finally {
-        setLoading(false);
+      } else {
+        setDocuments(docs || []);
       }
-    }, 250);
-
-    return () => clearTimeout(t);
+      if (!tasksErr && tasks) {
+        const map: Record<string,string> = {};
+        tasks.forEach((t: any) => (map[t.id] = t.title));
+        setTaskMap(map);
+      }
+      setLoading(false);
+    })();
   }, [user, navigate]);
 
   if (!user) return null;
@@ -44,26 +58,43 @@ export function DocumentsPage() {
 
   const getLinkedTask = (taskId?: string) => {
     if (!taskId) return null;
-    return mockTasks.find(t => t.id === taskId);
+    const title = taskMap[taskId];
+    return title ? { id: taskId, title } : null;
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setUploading(true);
       setError(null);
-      // Simulate upload + AI extraction
-      const t = setTimeout(() => {
-        try {
-          navigate('/documents/extract', { state: { filename: file.name } });
-        } catch (err) {
-          setError('Failed to upload document.');
-        } finally {
-          setUploading(false);
-        }
-      }, 400);
+      try {
+        // upload file to Supabase storage (optional)
+        // const { data: storageData, error: storageErr } = await supabase.storage
+        //   .from('documents')
+        //   .upload(`user_${user!.id}/${file.name}`, file);
+        // if (storageErr) throw storageErr;
 
-      return () => clearTimeout(t);
+        // insert document record (without file_path for now)
+        const { data: doc, error: docErr } = await supabase
+          .from('documents')
+          .insert({
+            user_id: user!.id,
+            file_path: file.name,
+            extracted_title: null,
+            extracted_due_date: null,
+            extraction_confidence: null,
+          })
+          .select()
+          .single();
+        if (docErr) throw docErr;
+
+        navigate('/documents/extract', { state: { filename: file.name, documentId: doc?.id } });
+      } catch (err) {
+        console.error(err);
+        setError('Failed to upload document.');
+      } finally {
+        setUploading(false);
+      }
     }
   };
 
@@ -110,7 +141,7 @@ export function DocumentsPage() {
           ) : (
             <div className="divide-y divide-gray-200">
               {documents.map(doc => {
-                const linkedTask = getLinkedTask(doc.linkedTaskId);
+                const linkedTask = getLinkedTask(doc.task_id);
                 return (
                   <div key={doc.id} className="p-6 hover:bg-gray-50 transition-colors">
                     <div className="flex items-start gap-4">
@@ -119,12 +150,12 @@ export function DocumentsPage() {
                       </div>
                       
                       <div className="flex-1">
-                        <h4 className="font-semibold text-gray-900 mb-1">{doc.filename}</h4>
+                        <h4 className="font-semibold text-gray-900 mb-1">{doc.file_path}</h4>
                         
                         <div className="flex items-center gap-4 text-sm text-gray-500 mb-2">
                           <div className="flex items-center gap-1">
                             <Calendar className="w-4 h-4" />
-                            <span>Uploaded: {formatDate(doc.uploadDate)}</span>
+                            <span>Uploaded: {formatDate(doc.created_at)}</span>
                           </div>
                         </div>
 
