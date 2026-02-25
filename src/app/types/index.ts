@@ -8,6 +8,7 @@ export interface Task {
   notes: string;
   completed: boolean;
   status?: string;
+  createdAt?: string;
 }
 
 export interface Document {
