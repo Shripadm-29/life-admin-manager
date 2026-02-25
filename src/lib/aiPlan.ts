@@ -1,8 +1,8 @@
 import { supabase } from './supabaseClient';
 
 export type PlanItemType = {
-  planned_for: string; // ISO string
-  duration_minutes: number;
+  plannedFor: string;  // ISO string.
+  durationMinutes: number;
   title: string;
   checklist: string[];
 };
@@ -12,24 +12,30 @@ interface PreviewResponse {
 }
 
 interface AcceptResponse {
-  insertedItems: any[]; // row objects from task_plan_items
+  insertedItems: any[];  // Row objects from task_plan_items.
 }
 
 /**
- * Request an AI-generated preview plan for a task.  
- * @param taskId the id of the task to plan for
- * @param random if true, ask the LLM to vary the wording (used for regenerating)
+ * Request an AI-generated preview plan for a task.
+ * @param taskId The ID of the task to plan for.
+ * @param random If true, ask the LLM to vary the wording (used for regenerating).
  */
-export async function getPlanPreview(taskId: string, random = false): Promise<PlanItemType[]> {
+export const getPlanPreview = async (
+  taskId: string,
+  random = false,
+): Promise<PlanItemType[]> => {
   const headers: Record<string, string> = {};
   const session = await supabase.auth.getSession();
-  if (session.data.session?.access_token) {
-    headers['Authorization'] = `Bearer ${session.data.session.access_token}`;
+  if (session.data.session?.accessToken) {
+    headers.Authorization = `Bearer ${session.data.session.accessToken}`;
   }
-  const { data, error } = await supabase.functions.invoke<PreviewResponse>('ai-plan-preview', {
-    body: JSON.stringify({ task_id: taskId, random }),
-    headers,
-  });
+  const { data, error } = await supabase.functions.invoke<PreviewResponse>(
+    'ai-plan-preview',
+    {
+      body: JSON.stringify({ taskId, random }),
+      headers,
+    },
+  );
   if (error) {
     throw error;
   }
@@ -37,28 +43,31 @@ export async function getPlanPreview(taskId: string, random = false): Promise<Pl
     throw new Error('No preview data');
   }
   return data.previewPlan;
-}
+};
 
 /**
- * Persist an AI-generated plan to the database.  
- * @param taskId the id of the task
- * @param plan the plan items array (typically one returned from getPlanPreview)
- * @param regenerate whether existing items for the task should be wiped first
+ * Persist an AI-generated plan to the database.
+ * @param taskId The ID of the task.
+ * @param plan The plan items array (typically one returned from getPlanPreview).
+ * @param regenerate Whether existing items for the task should be wiped first.
  */
-export async function acceptPlan(
+export const acceptPlan = async (
   taskId: string,
   plan: PlanItemType[],
   regenerate = false,
-): Promise<any[]> {
+): Promise<any[]> => {
   const headers: Record<string, string> = {};
   const session = await supabase.auth.getSession();
-  if (session.data.session?.access_token) {
-    headers['Authorization'] = `Bearer ${session.data.session.access_token}`;
+  if (session.data.session?.accessToken) {
+    headers.Authorization = `Bearer ${session.data.session.accessToken}`;
   }
-  const { data, error } = await supabase.functions.invoke<AcceptResponse>('ai-plan-accept', {
-    body: JSON.stringify({ task_id: taskId, plan, regenerate }),
-    headers,
-  });
+  const { data, error } = await supabase.functions.invoke<AcceptResponse>(
+    'ai-plan-accept',
+    {
+      body: JSON.stringify({ taskId, plan, regenerate }),
+      headers,
+    },
+  );
   if (error) {
     throw error;
   }
@@ -66,11 +75,14 @@ export async function acceptPlan(
     throw new Error('No accept response');
   }
   return data.insertedItems;
-}
+};
 
 /**
- * Convenience wrapper for regenerating the plan (simply calls preview with random=true).
+ * Convenience wrapper for regenerating the plan
+ * (simply calls preview with random=true).
  */
-export async function regeneratePlan(taskId: string): Promise<PlanItemType[]> {
+export const regeneratePlan = async (
+  taskId: string,
+): Promise<PlanItemType[]> => {
   return getPlanPreview(taskId, true);
-}
+};
