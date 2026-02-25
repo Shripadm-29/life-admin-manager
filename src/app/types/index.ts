@@ -3,7 +3,7 @@ export interface Task {
   title: string;
   category: string;
   priority: 'low' | 'medium' | 'high';
-  // frontend code typically works with dueDate when displaying
+  // Frontend code typically works with dueDate when displaying.
   dueDate: string;
   notes: string;
   completed: boolean;
@@ -12,12 +12,12 @@ export interface Task {
 
 export interface Document {
   id: string;
-  file_path: string;
-  task_id?: string;
-  extracted_title?: string;
-  extracted_due_date?: string;
-  extraction_confidence?: number;
-  created_at?: string;
+  filePath: string;
+  taskId?: string;
+  extractedTitle?: string;
+  extractedDueDate?: string;
+  extractionConfidence?: number;
+  createdAt?: string;
 }
 
 export interface Reminder {

@@ -1,6 +1,8 @@
 import { createBrowserRouter, Navigate } from 'react-router';
 import { Login } from '@/app/components/Login';
 import { Signup } from '@/app/components/Signup';
+import { PasswordReset } from '@/app/components/PasswordReset';
+import { ResetPasswordConfirm } from '@/app/components/ResetPasswordConfirm';
 import { Dashboard } from '@/app/components/Dashboard';
 import { TasksPage } from '@/app/components/TasksPage';
 import { TaskForm } from '@/app/components/TaskForm';
@@ -22,6 +24,14 @@ export const router = createBrowserRouter([
   {
     path: '/signup',
     Component: Signup,
+  },
+  {
+    path: '/reset-password',
+    Component: PasswordReset,
+  },
+  {
+    path: '/reset-password-confirm',
+    Component: ResetPasswordConfirm,
   },
   {
     path: '/dashboard',

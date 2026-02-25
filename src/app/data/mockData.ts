@@ -60,26 +60,22 @@ export const mockTasks: Task[] = [
 export const mockDocuments: Document[] = [
   {
     id: '1',
-    filename: 'Transcript_Fall_2025.pdf',
-    uploadDate: '2026-01-15',
-    linkedTaskId: '1',
+    filePath: 'Transcript_Fall_2025.pdf',
+    taskId: '1',
   },
   {
     id: '2',
-    filename: 'Tax_Form_1098T.pdf',
-    uploadDate: '2026-01-20',
-    linkedTaskId: '1',
+    filePath: 'Tax_Form_1098T.pdf',
+    taskId: '1',
   },
   {
     id: '3',
-    filename: 'Resume_Jan_2026.pdf',
-    uploadDate: '2026-01-22',
-    linkedTaskId: '4',
+    filePath: 'Resume_Jan_2026.pdf',
+    taskId: '4',
   },
   {
     id: '4',
-    filename: 'Health_Insurance_Card.pdf',
-    uploadDate: '2026-01-10',
+    filePath: 'Health_Insurance_Card.pdf',
   },
 ];
 

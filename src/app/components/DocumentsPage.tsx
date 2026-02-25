@@ -5,16 +5,17 @@ import { useAuth } from '@/app/context/AuthContext';
 import { supabase } from '@/lib/supabaseClient';
 import { StatusMessage } from '@/app/components/ui/status-message';
 import { Document } from '@/app/types';
-import { Upload, FileText, Link as LinkIcon, Calendar } from 'lucide-react';
+import { Upload, FileText, Link as LinkIcon, Calendar, Search } from 'lucide-react';
 
 export function DocumentsPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [documents, setDocuments] = useState<Document[]>([]);
-  const [taskMap, setTaskMap] = useState<Record<string,string>>({}); // id -> title
+  const [taskMap, setTaskMap] = useState<Record<string, string>>({}); // id -> title
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     if (!user) {
@@ -38,7 +39,17 @@ export function DocumentsPage() {
       if (docsErr) {
         setError('Failed to load documents.');
       } else {
-        setDocuments(docs || []);
+        // Normalize snake_case from database to camelCase.
+        const normalized = (docs || []).map((d: any) => ({
+          id: d.id,
+          filePath: d.file_path,
+          taskId: d.task_id,
+          extractedTitle: d.extracted_title,
+          extractedDueDate: d.extracted_due_date,
+          extractionConfidence: d.extraction_confidence,
+          createdAt: d.created_at,
+        }));
+        setDocuments(normalized);
       }
       if (!tasksErr && tasks) {
         const map: Record<string,string> = {};
@@ -50,6 +61,15 @@ export function DocumentsPage() {
   }, [user, navigate]);
 
   if (!user) return null;
+
+  const filteredDocuments = documents.filter(doc => {
+    const matchesSearch =
+      doc.filePath.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (doc.extractedTitle && doc.extractedTitle.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (doc.taskId && taskMap[doc.taskId]?.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    return matchesSearch;
+  });
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -103,6 +123,14 @@ export function DocumentsPage() {
       <Navigation />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-8 bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h3 className="font-semibold text-blue-900 mb-2">💡 AI Document Extraction</h3>
+          <p className="text-sm text-blue-800">
+            Upload documents like syllabi, assignment sheets, or bills, and our AI will automatically 
+            extract important dates and create tasks for you.
+          </p>
+        </div>
+
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -121,6 +149,19 @@ export function DocumentsPage() {
               />
             </label>
           </div>
+
+          <div className="bg-white rounded-lg shadow p-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search documents by filename, title, or linked task..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
         </div>
 
         <div className="bg-white rounded-lg shadow">
@@ -132,16 +173,16 @@ export function DocumentsPage() {
               message="Loading documents..."
               icon={<FileText className="w-12 h-12 mx-auto mb-3 text-gray-400" />}
             />
-          ) : documents.length === 0 ? (
+          ) : filteredDocuments.length === 0 ? (
             <StatusMessage
               variant="empty"
-              message="No documents uploaded yet."
+              message={documents.length === 0 ? 'No documents uploaded yet.' : 'No documents match your search.'}
               icon={<FileText className="w-12 h-12 mx-auto mb-3 text-gray-400" />}
             />
           ) : (
             <div className="divide-y divide-gray-200">
-              {documents.map(doc => {
-                const linkedTask = getLinkedTask(doc.task_id);
+              {filteredDocuments.map(doc => {
+                const linkedTask = getLinkedTask(doc.taskId);
                 return (
                   <div key={doc.id} className="p-6 hover:bg-gray-50 transition-colors">
                     <div className="flex items-start gap-4">
@@ -150,12 +191,12 @@ export function DocumentsPage() {
                       </div>
                       
                       <div className="flex-1">
-                        <h4 className="font-semibold text-gray-900 mb-1">{doc.file_path}</h4>
+                        <h4 className="font-semibold text-gray-900 mb-1">{doc.filePath}</h4>
                         
                         <div className="flex items-center gap-4 text-sm text-gray-500 mb-2">
                           <div className="flex items-center gap-1">
                             <Calendar className="w-4 h-4" />
-                            <span>Uploaded: {formatDate(doc.created_at)}</span>
+                            <span>Uploaded: {formatDate(doc.createdAt)}</span>
                           </div>
                         </div>
 
@@ -182,14 +223,6 @@ export function DocumentsPage() {
               })}
             </div>
           )}
-        </div>
-
-        <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h3 className="font-semibold text-blue-900 mb-2">💡 AI Document Extraction</h3>
-          <p className="text-sm text-blue-800">
-            Upload documents like syllabi, assignment sheets, or bills, and our AI will automatically 
-            extract important dates and create tasks for you.
-          </p>
         </div>
       </div>
     </div>
