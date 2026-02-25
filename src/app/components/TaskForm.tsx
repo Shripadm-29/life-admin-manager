@@ -13,27 +13,24 @@ export function TaskForm() {
     setError('');
 
     try {
-      // 1. Get the logged-in user
+      // 1. Get user
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('You must be logged in to create a task.');
+      if (!user) throw new Error('You must be logged in.');
 
       // 2. Extract form data safely
       const formElement = e.target as HTMLFormElement;
       const formData = new FormData(formElement);
       
-      // Grab the text from the form
       const title = formData.get('title') as string;
       const descriptionText = formData.get('description') as string;
       const due_date = formData.get('dueDate') as string;
       const priority = formData.get('priority') as string;
+      const file = formData.get('document') as File; // <-- NEW: Get the file
 
-      // Basic Validation
-      if (!title || !due_date) {
-        throw new Error('Title and Due Date are required.');
-      }
+      if (!title || !due_date) throw new Error('Title and Due Date are required.');
 
-      // 3. Insert into Supabase
-      const { error: supabaseError } = await supabase
+      // 3. Insert Task AND GET THE ID BACK (.select().single())
+      const { data: taskData, error: taskError } = await supabase
         .from('tasks')
         .insert([
           {
@@ -42,13 +39,42 @@ export function TaskForm() {
             notes: descriptionText,
             due_date,
             priority,
-            status: 'pending' 
+            status: 'pending'
           }
-        ]);
+        ])
+        .select() // Tells Supabase to return the newly created row
+        .single(); // We only expect one row back
 
-      if (supabaseError) throw supabaseError;
+      if (taskError) throw taskError;
 
-      // 4. Go back to tasks page when successful!
+      // 4. Handle File Upload (If a file was actually selected)
+      if (file && file.size > 0) {
+        // Create a unique, safe file path: user_id/random_number.extension
+        const fileExt = file.name.split('.').pop();
+        const filePath = `${user.id}/${Math.random()}.${fileExt}`;
+
+        // A. Upload physical file to Storage Bucket
+        const { error: uploadError } = await supabase.storage
+          .from('documents')
+          .upload(filePath, file);
+
+        if (uploadError) throw uploadError;
+
+        // B. Save record to the 'documents' database table so we can track it
+        const { error: docError } = await supabase
+          .from('documents')
+          .insert([
+            {
+              user_id: user.id,
+              task_id: taskData.id, 
+              file_path: filePath
+            }
+          ]);
+
+        if (docError) throw docError;
+      }
+
+      // 5. Navigate back when successful
       navigate('/tasks');
       
     } catch (err: any) {
@@ -72,7 +98,7 @@ export function TaskForm() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Description</label>
+            <label className="block text-sm font-medium text-gray-700">Notes/Description</label>
             <textarea name="description" rows={3} className="mt-1 w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"></textarea>
           </div>
 
@@ -81,7 +107,6 @@ export function TaskForm() {
               <label className="block text-sm font-medium text-gray-700">Due Date *</label>
               <input name="dueDate" type="date" required className="mt-1 w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500" />
             </div>
-
             <div>
               <label className="block text-sm font-medium text-gray-700">Priority</label>
               <select name="priority" className="mt-1 w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500">
@@ -92,9 +117,19 @@ export function TaskForm() {
             </div>
           </div>
 
+          {/* NEW: Document Upload Field */}
+          <div className="p-4 border border-dashed border-gray-300 rounded-lg bg-gray-50">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Attach a Document (Optional)</label>
+            <input 
+              name="document" 
+              type="file" 
+              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" 
+            />
+          </div>
+
           <div className="flex gap-4 pt-4">
             <button type="submit" disabled={loading} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">
-              {loading ? 'Creating...' : 'Create Task'}
+              {loading ? 'Saving...' : 'Create Task'}
             </button>
             <button type="button" onClick={() => navigate('/tasks')} className="px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200">
               Cancel

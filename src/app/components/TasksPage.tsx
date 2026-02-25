@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabaseClient';
+import { Paperclip, Download, Eye, XCircle } from 'lucide-react'; // Added more icons
 
 export function TasksPage() {
   const navigate = useNavigate();
@@ -20,15 +21,27 @@ export function TasksPage() {
         return;
       }
 
-      // 1. Backend query optimization & Sorting (Ascending date)
-      const { data, error } = await supabase
+      const { data: tasksData, error: tasksError } = await supabase
         .from('tasks')
         .select('*')
         .eq('user_id', user.id)
         .order('due_date', { ascending: true }); 
 
-      if (error) throw error;
-      setTasks(data || []);
+      if (tasksError) throw tasksError;
+
+      const { data: docsData, error: docsError } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('user_id', user.id);
+
+      if (docsError) throw docsError;
+
+      const mergedTasks = (tasksData || []).map(task => ({
+        ...task,
+        document: (docsData || []).find(doc => doc.task_id === task.id) || null
+      }));
+
+      setTasks(mergedTasks);
     } catch (error) {
       console.error('Error fetching tasks:', error);
     } finally {
@@ -36,28 +49,81 @@ export function TasksPage() {
     }
   };
 
+  const handleViewDocument = async (filePath: string) => {
+    try {
+      const { data, error } = await supabase.storage.from('documents').createSignedUrl(filePath, 60);
+      if (error) throw error;
+      window.open(data.signedUrl, '_blank');
+    } catch (error) {
+      console.error('Error opening document:', error);
+      alert('Could not open the document.');
+    }
+  };
+
+  // --- SPRINT 3: Download Document ---
+  const handleDownloadDocument = async (filePath: string, fileName: string) => {
+    try {
+      const { data, error } = await supabase.storage.from('documents').download(filePath);
+      if (error) throw error;
+      
+      // Create a temporary link to force the browser to download the file
+      const url = URL.createObjectURL(data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName; // Names the file correctly
+      link.click();
+      URL.revokeObjectURL(url); // Clean up memory
+    } catch (error) {
+      console.error('Error downloading:', error);
+      alert('Could not download document.');
+    }
+  };
+
+  // --- SPRINT 3: Delete Document ---
+  const handleDeleteDocument = async (taskId: string, docId: string, filePath: string) => {
+    if (!window.confirm('Are you sure you want to remove this file?')) return;
+    try {
+      // 1. Remove from Storage Bucket
+      const { error: storageError } = await supabase.storage.from('documents').remove([filePath]);
+      if (storageError) throw storageError;
+
+      // 2. Remove from Database
+      const { error: dbError } = await supabase.from('documents').delete().eq('id', docId);
+      if (dbError) throw dbError;
+
+      // 3. Update UI locally to remove the file block
+      setTasks(tasks.map(t => t.id === taskId ? { ...t, document: null } : t));
+    } catch (error) {
+      console.error('Error deleting document:', error);
+      alert('Could not delete document.');
+    }
+  };
+
   const handleToggleComplete = async (taskId: string, currentStatus: string) => {
     try {
       const newStatus = currentStatus === 'completed' ? 'pending' : 'completed';
       setTasks(tasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
-      
-      const { error } = await supabase
-        .from('tasks')
-        .update({ status: newStatus })
-        .eq('id', taskId);
-
+      const { error } = await supabase.from('tasks').update({ status: newStatus }).eq('id', taskId);
       if (error) throw error;
     } catch (error) {
       console.error('Error updating task:', error);
-      fetchTasks(); // Revert UI if database fails
+      fetchTasks(); 
     }
   };
 
-  const handleDelete = async (taskId: string) => {
+  // --- SPRINT 3 EDGE CASE: Task Deletion ---
+  const handleDelete = async (taskId: string, document?: any) => {
     if (!window.confirm('Are you sure you want to delete this task?')) return; 
     try {
+      // If task has a document attached, delete physical file first to prevent storage leaks
+      if (document && document.file_path) {
+        await supabase.storage.from('documents').remove([document.file_path]);
+      }
+
+      // Now delete the task (the database cascade will handle the rest)
       const { error } = await supabase.from('tasks').delete().eq('id', taskId);
       if (error) throw error;
+      
       setTasks(tasks.filter(t => t.id !== taskId));
     } catch (error) {
       alert('Error deleting task.');
@@ -74,17 +140,14 @@ export function TasksPage() {
     }
   };
 
-  // Date formatting utility
   const formatDate = (dateString: string) => {
     if (!dateString) return 'No date';
-    // Add timezone offset to prevent day-shifting bugs
     const date = new Date(dateString);
     const userTimezoneOffset = date.getTimezoneOffset() * 60000;
     const adjustedDate = new Date(date.getTime() + userTimezoneOffset);
     return adjustedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
-  // Logic to separate tasks into Arrays
   const filteredTasks = tasks.filter(task => 
     task.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -96,22 +159,19 @@ export function TasksPage() {
     if (!t.due_date || t.status === 'completed') return false;
     const dueDate = new Date(t.due_date);
     const userTimezoneOffset = dueDate.getTimezoneOffset() * 60000;
-    const adjustedDueDate = new Date(dueDate.getTime() + userTimezoneOffset);
-    return adjustedDueDate < today;
+    return new Date(dueDate.getTime() + userTimezoneOffset) < today;
   });
 
   const upcomingTasks = filteredTasks.filter(t => {
     if (t.status === 'completed') return false;
-    if (!t.due_date) return true; // Tasks without dates go to upcoming
+    if (!t.due_date) return true; 
     const dueDate = new Date(t.due_date);
     const userTimezoneOffset = dueDate.getTimezoneOffset() * 60000;
-    const adjustedDueDate = new Date(dueDate.getTime() + userTimezoneOffset);
-    return adjustedDueDate >= today;
+    return new Date(dueDate.getTime() + userTimezoneOffset) >= today;
   });
 
   const completedTasks = filteredTasks.filter(t => t.status === 'completed');
 
-  // Reusable Component for Task Cards
   const renderTaskCard = (task: any, isOverdue: boolean = false) => (
     <div key={task.id} className={`p-5 rounded-lg shadow-sm border flex items-start gap-4 transition-opacity ${task.status === 'completed' ? 'opacity-60 bg-gray-50' : 'bg-white'} ${isOverdue ? 'border-red-300 bg-red-50' : ''}`}>
       
@@ -122,9 +182,9 @@ export function TasksPage() {
         className="mt-1 w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
       />
       
-      <div className="flex-1">
+      <div className="flex-1 min-w-0">
         <div className="flex items-center gap-3 mb-1">
-          <h3 className={`text-lg font-medium ${isOverdue ? 'text-red-900' : 'text-gray-900'} ${task.status === 'completed' ? 'line-through text-gray-500' : ''}`}>
+          <h3 className={`text-lg font-medium truncate ${isOverdue ? 'text-red-900' : 'text-gray-900'} ${task.status === 'completed' ? 'line-through text-gray-500' : ''}`}>
             {task.title}
           </h3>
           <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${getPriorityColor(task.priority)}`}>
@@ -134,20 +194,52 @@ export function TasksPage() {
         
         {task.notes && <p className="text-gray-600 text-sm mb-2">{task.notes}</p>}
         
-        <div className={`text-xs flex items-center gap-2 ${isOverdue ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
+        <div className={`text-xs flex items-center gap-2 mb-3 ${isOverdue ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
           <span>Category: {task.category || 'misc'}</span>
           <span>•</span>
           <span>Due: {formatDate(task.due_date)}</span>
           {isOverdue && <span>(Overdue)</span>}
         </div>
+
+        {/* --- SPRINT 3: Advanced Attachment UI --- */}
+        {task.document && (
+          <div className="flex flex-col gap-2 p-3 bg-gray-50 border border-gray-200 rounded-md max-w-sm mt-3">
+            <div className="flex items-center gap-2 text-sm text-gray-700 overflow-hidden">
+              <Paperclip className="w-4 h-4 flex-shrink-0 text-gray-400" />
+              <span className="truncate font-medium">{task.document.file_path.split('/').pop()}</span>
+            </div>
+            <div className="flex items-center gap-2 mt-1">
+              <button 
+                onClick={() => handleViewDocument(task.document.file_path)}
+                className="inline-flex items-center justify-center gap-1 text-xs bg-white border border-gray-300 px-3 py-1.5 rounded hover:bg-gray-100 font-medium text-gray-700 transition-colors"
+              >
+                <Eye className="w-3 h-3" /> View
+              </button>
+              <button 
+                onClick={() => handleDownloadDocument(task.document.file_path, task.document.file_path.split('/').pop())}
+                className="inline-flex items-center justify-center gap-1 text-xs bg-white border border-gray-300 px-3 py-1.5 rounded hover:bg-gray-100 font-medium text-gray-700 transition-colors"
+              >
+                <Download className="w-3 h-3" /> Download
+              </button>
+              <div className="flex-1"></div>
+              <button 
+                onClick={() => handleDeleteDocument(task.id, task.document.id, task.document.file_path)}
+                className="inline-flex items-center justify-center gap-1 text-xs text-red-600 hover:text-red-800 font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors"
+                title="Remove Document"
+              >
+                <XCircle className="w-3.5 h-3.5" /> Remove
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col gap-2 items-end">
         <button 
-          onClick={() => handleDelete(task.id)}
+          onClick={() => handleDelete(task.id, task.document)}
           className="text-sm text-red-600 hover:underline font-medium"
         >
-          Delete
+          Delete Task
         </button>
       </div>
     </div>
@@ -179,8 +271,6 @@ export function TasksPage() {
       </div>
 
       <div className="space-y-8">
-        
-        {/* Overdue Section */}
         {overdueTasks.length > 0 && (
           <section>
             <h2 className="text-xl font-bold text-red-600 mb-4 flex items-center gap-2">
@@ -192,7 +282,6 @@ export function TasksPage() {
           </section>
         )}
 
-        {/* Upcoming Section */}
         <section>
           <h2 className="text-xl font-bold text-gray-900 mb-4">
             Upcoming ({upcomingTasks.length})
@@ -208,7 +297,6 @@ export function TasksPage() {
           </div>
         </section>
 
-        {/* Completed Section */}
         {completedTasks.length > 0 && (
           <section className="pt-8 border-t">
             <h2 className="text-xl font-bold text-gray-500 mb-4">
@@ -219,7 +307,6 @@ export function TasksPage() {
             </div>
           </section>
         )}
-
       </div>
     </div>
   );
