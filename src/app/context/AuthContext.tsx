@@ -1,6 +1,8 @@
-import { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import { supabase } from '@/lib/supabaseClient';
 
 interface User {
+  id: string;
   email: string;
 }
 
@@ -16,25 +18,37 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
 
-  const login = (email: string, password: string) => {
-    // Mock authentication
-    if (email && password) {
-      setUser({ email });
-      return true;
+  // sync with supabase session on mount
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.user) {
+        setUser({ id: data.session.user.id, email: data.session.user.email || '' });
+      }
+    })();
+  }, []);
+
+  const login = async (email: string, password: string) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error || !data.session?.user) {
+      return false;
     }
-    return false;
+    setUser({ id: data.session.user.id, email: data.session.user.email || '' });
+    return true;
   };
 
-  const signup = (email: string, password: string, confirmPassword: string) => {
-    // Mock signup
-    if (email && password && password === confirmPassword) {
-      setUser({ email });
-      return true;
+  const signup = async (email: string, password: string, confirmPassword: string) => {
+    if (password !== confirmPassword) return false;
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error || !data.user) {
+      return false;
     }
-    return false;
+    setUser({ id: data.user.id, email: data.user.email || '' });
+    return true;
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
   };
 

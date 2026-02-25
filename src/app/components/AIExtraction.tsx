@@ -4,6 +4,9 @@ import { Navigation } from '@/app/components/Navigation';
 import { useAuth } from '@/app/context/AuthContext';
 import { ArrowLeft, CheckCircle, Edit2 } from 'lucide-react';
 import { StatusMessage } from '@/app/components/ui/status-message';
+import { supabase } from '@/lib/supabaseClient';
+import { getPlanPreview, acceptPlan, regeneratePlan, PlanItemType } from '@/lib/aiPlan';
+import { AIPlanModal } from '@/app/components/AIPlanModal';
 
 export function AIExtraction() {
   const { user } = useAuth();
@@ -17,6 +20,12 @@ export function AIExtraction() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // modal states for plan preview
+  const [planModalOpen, setPlanModalOpen] = useState(false);
+  const [planPreview, setPlanPreview] = useState<PlanItemType[]>([]);
+  const [planLoading, setPlanLoading] = useState(false);
+  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -64,22 +73,69 @@ export function AIExtraction() {
     );
   }
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     setActionLoading(true);
     setError(null);
-    // Simulate API call
-    const t = setTimeout(() => {
-      try {
-        console.log('Creating task:', { title: extractedTitle, dueDate: extractedDate });
-        navigate('/documents');
-      } catch (e) {
-        setError('Failed to create task.');
-      } finally {
-        setActionLoading(false);
-      }
-    }, 400);
 
-    return () => clearTimeout(t);
+    try {
+      // look for existing task with the same title (case-insensitive)
+      const { data: existing } = await supabase
+        .from('tasks')
+        .select('*')
+        .ilike('title', extractedTitle || filename)
+        .eq('user_id', user!.id)
+        .limit(1)
+        .single();
+      let task: any;
+      if (existing) {
+        task = existing;
+        // optionally update due date if new value is provided
+        if (extractedDate && extractedDate !== existing.due_date) {
+          await supabase
+            .from('tasks')
+            .update({ due_date: extractedDate })
+            .eq('id', existing.id);
+          task.due_date = extractedDate;
+        }
+      } else {
+        const { data: newTask, error: taskErr } = await supabase
+          .from('tasks')
+          .insert({
+            title: extractedTitle || filename,
+            due_date: extractedDate || null,
+            category: 'Academic',
+            priority: 'medium',
+            notes: null,
+            user_id: user!.id,
+          })
+          .select()
+          .single();
+        if (taskErr || !newTask) throw taskErr || new Error('no task');
+        task = newTask;
+      }
+
+      // attach document record if we have an id in state
+      const documentId = location.state?.documentId;
+      if (documentId) {
+        await supabase
+          .from('documents')
+          .update({ task_id: task.id, extracted_title: extractedTitle, extracted_due_date: extractedDate, extraction_confidence: 1 })
+          .eq('id', documentId);
+      }
+
+      // generate preview plan immediately
+      setCurrentTaskId(task.id);
+      setPlanLoading(true);
+      const preview = await getPlanPreview(task.id);
+      setPlanPreview(preview);
+      setPlanModalOpen(true);
+    } catch (e) {
+      console.error(e);
+      setError('Failed to create task.');
+    } finally {
+      setActionLoading(false);
+      setPlanLoading(false);
+    }
   };
 
   const handleEdit = () => {
@@ -205,6 +261,29 @@ export function AIExtraction() {
           </div>
         </div>
       </div>
+
+      {/* plan preview modal */}
+      <AIPlanModal
+        open={planModalOpen}
+        taskTitle={extractedTitle || filename}
+        taskDue={extractedDate}
+        previewPlan={planPreview}
+        onAccept={async (plan) => {
+          if (currentTaskId) {
+            await acceptPlan(currentTaskId, plan);
+            setPlanModalOpen(false);
+            navigate('/tasks/' + currentTaskId);
+          }
+        }}
+        onRegenerate={async () => {
+          if (currentTaskId) {
+            const plan = await regeneratePlan(currentTaskId);
+            setPlanPreview(plan);
+          }
+        }}
+        onClose={() => setPlanModalOpen(false)}
+        loading={planLoading}
+      />
     </div>
   );
 }

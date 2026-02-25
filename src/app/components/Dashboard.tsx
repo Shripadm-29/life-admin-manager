@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { Navigation } from '@/app/components/Navigation';
 import { useAuth } from '@/app/context/AuthContext';
-import { mockTasks } from '@/app/data/mockData';
+import { supabase } from '@/lib/supabaseClient';
 import { StatusMessage } from '@/app/components/ui/status-message';
 import { Task } from '@/app/types';
 import { Plus, AlertCircle, Clock } from 'lucide-react';
@@ -21,17 +21,28 @@ export function Dashboard() {
     }
     setLoading(true);
     setError(null);
-    const t = setTimeout(() => {
-      try {
-        setTasks(mockTasks);
-      } catch (e) {
+    (async () => {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('user_id', user!.id)
+        .order('due_date', { ascending: true });
+      if (error) {
         setError('Failed to load dashboard data.');
-      } finally {
-        setLoading(false);
+      } else {
+        const normalized = (data || []).map((d: any) => ({
+          id: d.id,
+          title: d.title,
+          category: d.category,
+          priority: d.priority,
+          dueDate: d.due_date,
+          notes: d.notes || '',
+          completed: d.status === 'completed',
+        }));
+        setTasks(normalized);
       }
-    }, 250);
-
-    return () => clearTimeout(t);
+      setLoading(false);
+    })();
   }, [user, navigate]);
 
   if (!user) return null;

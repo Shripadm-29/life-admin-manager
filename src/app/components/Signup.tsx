@@ -10,7 +10,7 @@ export function Signup() {
   const { signup } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     
@@ -24,7 +24,7 @@ export function Signup() {
       return;
     }
 
-    const success = signup(email, password, confirmPassword);
+    const success = await signup(email, password, confirmPassword);
     if (success) {
       navigate('/dashboard');
     } else {

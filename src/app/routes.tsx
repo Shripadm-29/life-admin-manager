@@ -4,6 +4,7 @@ import { Signup } from '@/app/components/Signup';
 import { Dashboard } from '@/app/components/Dashboard';
 import { TasksPage } from '@/app/components/TasksPage';
 import { TaskForm } from '@/app/components/TaskForm';
+import { TaskDetails } from '@/app/components/TaskDetails';
 import { DocumentsPage } from '@/app/components/DocumentsPage';
 import { AIExtraction } from '@/app/components/AIExtraction';
 import { RemindersPage } from '@/app/components/RemindersPage';
@@ -33,6 +34,10 @@ export const router = createBrowserRouter([
   {
     path: '/tasks/new',
     Component: TaskForm,
+  },
+  {
+    path: '/tasks/:id',
+    Component: TaskDetails,
   },
   {
     path: '/tasks/:id/edit',
