@@ -1,13 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabaseClient';
-import { Paperclip, Download, Eye, XCircle } from 'lucide-react'; // Added more icons
+import { Paperclip, Download, Eye, XCircle, Edit2 } from 'lucide-react';
+import { Navigation } from '@/app/components/Navigation'; 
 
 export function TasksPage() {
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // --- NEW: Edit Task State ---
+  const [editingTask, setEditingTask] = useState<any>(null);
+  const [editForm, setEditForm] = useState({ title: '', notes: '', due_date: '', priority: 'medium' });
 
   useEffect(() => {
     fetchTasks();
@@ -49,6 +54,40 @@ export function TasksPage() {
     }
   };
 
+  // --- NEW: Handle Edit Actions ---
+  const openEditModal = (task: any) => {
+    setEditingTask(task);
+    setEditForm({
+      title: task.title,
+      notes: task.notes || '',
+      due_date: task.due_date || '',
+      priority: task.priority || 'medium'
+    });
+  };
+
+  const saveEditTask = async () => {
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({
+          title: editForm.title,
+          notes: editForm.notes,
+          due_date: editForm.due_date,
+          priority: editForm.priority
+        })
+        .eq('id', editingTask.id);
+
+      if (error) throw error;
+
+      // Update UI instantly
+      setTasks(tasks.map(t => t.id === editingTask.id ? { ...t, ...editForm } : t));
+      setEditingTask(null); // Close modal
+    } catch (error) {
+      console.error('Error updating task:', error);
+      alert('Could not update task.');
+    }
+  };
+
   const handleViewDocument = async (filePath: string) => {
     try {
       const { data, error } = await supabase.storage.from('documents').createSignedUrl(filePath, 60);
@@ -60,38 +99,32 @@ export function TasksPage() {
     }
   };
 
-  // --- SPRINT 3: Download Document ---
   const handleDownloadDocument = async (filePath: string, fileName: string) => {
     try {
       const { data, error } = await supabase.storage.from('documents').download(filePath);
       if (error) throw error;
       
-      // Create a temporary link to force the browser to download the file
       const url = URL.createObjectURL(data);
       const link = document.createElement('a');
       link.href = url;
-      link.download = fileName; // Names the file correctly
+      link.download = fileName;
       link.click();
-      URL.revokeObjectURL(url); // Clean up memory
+      URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error downloading:', error);
       alert('Could not download document.');
     }
   };
 
-  // --- SPRINT 3: Delete Document ---
   const handleDeleteDocument = async (taskId: string, docId: string, filePath: string) => {
     if (!window.confirm('Are you sure you want to remove this file?')) return;
     try {
-      // 1. Remove from Storage Bucket
       const { error: storageError } = await supabase.storage.from('documents').remove([filePath]);
       if (storageError) throw storageError;
 
-      // 2. Remove from Database
       const { error: dbError } = await supabase.from('documents').delete().eq('id', docId);
       if (dbError) throw dbError;
 
-      // 3. Update UI locally to remove the file block
       setTasks(tasks.map(t => t.id === taskId ? { ...t, document: null } : t));
     } catch (error) {
       console.error('Error deleting document:', error);
@@ -111,16 +144,12 @@ export function TasksPage() {
     }
   };
 
-  // --- SPRINT 3 EDGE CASE: Task Deletion ---
   const handleDelete = async (taskId: string, document?: any) => {
     if (!window.confirm('Are you sure you want to delete this task?')) return; 
     try {
-      // If task has a document attached, delete physical file first to prevent storage leaks
       if (document && document.file_path) {
         await supabase.storage.from('documents').remove([document.file_path]);
       }
-
-      // Now delete the task (the database cascade will handle the rest)
       const { error } = await supabase.from('tasks').delete().eq('id', taskId);
       if (error) throw error;
       
@@ -201,7 +230,6 @@ export function TasksPage() {
           {isOverdue && <span>(Overdue)</span>}
         </div>
 
-        {/* --- SPRINT 3: Advanced Attachment UI --- */}
         {task.document && (
           <div className="flex flex-col gap-2 p-3 bg-gray-50 border border-gray-200 rounded-md max-w-sm mt-3">
             <div className="flex items-center gap-2 text-sm text-gray-700 overflow-hidden">
@@ -235,11 +263,18 @@ export function TasksPage() {
       </div>
 
       <div className="flex flex-col gap-2 items-end">
+        {/* NEW: Edit Button */}
+        <button 
+          onClick={() => openEditModal(task)}
+          className="text-sm text-blue-600 hover:underline font-medium inline-flex items-center gap-1"
+        >
+          <Edit2 className="w-3 h-3" /> Edit
+        </button>
         <button 
           onClick={() => handleDelete(task.id, task.document)}
           className="text-sm text-red-600 hover:underline font-medium"
         >
-          Delete Task
+          Delete
         </button>
       </div>
     </div>
@@ -248,66 +283,139 @@ export function TasksPage() {
   if (loading) return <div className="p-8 text-center">Loading Tasks...</div>;
 
   return (
-    <div className="max-w-5xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gray-50">
       
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Tasks</h1>
-          <p className="text-gray-600">Manage all your tasks and deadlines</p>
-        </div>
-        <Link to="/tasks/new" className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 font-medium">
-          + Add Task
-        </Link>
-      </div>
+      {/* SPRINT 4/Polish: Added the Missing Navbar here! */}
+      <Navigation />
 
-      <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 flex gap-4 mb-8">
-        <input 
-          type="text" 
-          placeholder="Search tasks..." 
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="flex-1 border p-2 rounded focus:ring-blue-500 focus:border-blue-500"
-        />
-      </div>
-
-      <div className="space-y-8">
-        {overdueTasks.length > 0 && (
-          <section>
-            <h2 className="text-xl font-bold text-red-600 mb-4 flex items-center gap-2">
-              ⚠️ Overdue ({overdueTasks.length})
-            </h2>
-            <div className="space-y-4">
-              {overdueTasks.map(t => renderTaskCard(t, true))}
-            </div>
-          </section>
-        )}
-
-        <section>
-          <h2 className="text-xl font-bold text-gray-900 mb-4">
-            Upcoming ({upcomingTasks.length})
-          </h2>
-          <div className="space-y-4">
-            {upcomingTasks.length === 0 && overdueTasks.length === 0 ? (
-              <div className="text-center p-8 bg-white rounded-lg shadow-sm border text-gray-500">
-                No upcoming tasks. You're all caught up!
-              </div>
-            ) : (
-              upcomingTasks.map(t => renderTaskCard(t, false))
-            )}
+      <div className="max-w-5xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+        
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Tasks</h1>
+            <p className="text-gray-600">Manage all your tasks and deadlines</p>
           </div>
-        </section>
+          <Link to="/tasks/new" className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 font-medium">
+            + Add Task
+          </Link>
+        </div>
 
-        {completedTasks.length > 0 && (
-          <section className="pt-8 border-t">
-            <h2 className="text-xl font-bold text-gray-500 mb-4">
-              Completed ({completedTasks.length})
+        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 flex gap-4 mb-8">
+          <input 
+            type="text" 
+            placeholder="Search tasks..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="flex-1 border p-2 rounded focus:ring-blue-500 focus:border-blue-500"
+          />
+        </div>
+
+        <div className="space-y-8">
+          {overdueTasks.length > 0 && (
+            <section>
+              <h2 className="text-xl font-bold text-red-600 mb-4 flex items-center gap-2">
+                ⚠️ Overdue ({overdueTasks.length})
+              </h2>
+              <div className="space-y-4">
+                {overdueTasks.map(t => renderTaskCard(t, true))}
+              </div>
+            </section>
+          )}
+
+          <section>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">
+              Upcoming ({upcomingTasks.length})
             </h2>
             <div className="space-y-4">
-              {completedTasks.map(t => renderTaskCard(t, false))}
+              {upcomingTasks.length === 0 && overdueTasks.length === 0 ? (
+                <div className="text-center p-8 bg-white rounded-lg shadow-sm border text-gray-500">
+                  No upcoming tasks. You're all caught up!
+                </div>
+              ) : (
+                upcomingTasks.map(t => renderTaskCard(t, false))
+              )}
             </div>
           </section>
-        )}
+
+          {completedTasks.length > 0 && (
+            <section className="pt-8 border-t">
+              <h2 className="text-xl font-bold text-gray-500 mb-4">
+                Completed ({completedTasks.length})
+              </h2>
+              <div className="space-y-4">
+                {completedTasks.map(t => renderTaskCard(t, false))}
+              </div>
+            </section>
+          )}
+        </div>
       </div>
+
+      {/* --- NEW: Edit Modal Overlay --- */}
+      {editingTask && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full shadow-xl">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Edit Task</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Title</label>
+                <input 
+                  type="text" 
+                  value={editForm.title} 
+                  onChange={e => setEditForm({...editForm, title: e.target.value})}
+                  className="mt-1 w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Notes</label>
+                <textarea 
+                  value={editForm.notes} 
+                  onChange={e => setEditForm({...editForm, notes: e.target.value})}
+                  rows={3} 
+                  className="mt-1 w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Due Date</label>
+                  <input 
+                    type="date" 
+                    value={editForm.due_date} 
+                    onChange={e => setEditForm({...editForm, due_date: e.target.value})}
+                    className="mt-1 w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Priority</label>
+                  <select 
+                    value={editForm.priority} 
+                    onChange={e => setEditForm({...editForm, priority: e.target.value})}
+                    className="mt-1 w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button 
+                  onClick={saveEditTask}
+                  className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700 font-medium transition-colors"
+                >
+                  Save Changes
+                </button>
+                <button 
+                  onClick={() => setEditingTask(null)}
+                  className="flex-1 bg-gray-100 text-gray-700 py-2 rounded hover:bg-gray-200 font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
