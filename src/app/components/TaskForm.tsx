@@ -17,6 +17,8 @@ export function TaskForm() {
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
   const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -54,6 +56,33 @@ export function TaskForm() {
 
   const categories = ['Academic', 'Finance', 'Career', 'Health', 'Personal', 'Other'];
 
+  const uploadDocumentsForTask = async (taskId: string) => {
+    if (selectedFiles.length === 0) return;
+
+    for (const [index, file] of selectedFiles.entries()) {
+      const filePath = `${user!.id}/${Date.now()}-${index}-${file.name}`;
+
+      const { error: storageError } = await supabase.storage
+        .from('documents')
+        .upload(filePath, file, { upsert: false });
+
+      if (storageError) throw storageError;
+
+      const { error: documentError } = await supabase
+        .from('documents')
+        .insert({
+          user_id: user!.id,
+          task_id: taskId,
+          file_path: filePath,
+          extracted_title: null,
+          extracted_due_date: null,
+          extraction_confidence: null,
+        });
+
+      if (documentError) throw documentError;
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -64,6 +93,7 @@ export function TaskForm() {
     }
 
     try {
+      setSaving(true);
       if (isEdit && id) {
         await supabase
           .from('tasks')
@@ -85,6 +115,7 @@ export function TaskForm() {
           .select()
           .single();
         if (data) {
+          await uploadDocumentsForTask(data.id);
           navigate(`/tasks/${data.id}`);
         } else {
           navigate('/tasks');
@@ -92,7 +123,9 @@ export function TaskForm() {
       }
     } catch (err) {
       console.error(err);
-      setError('Failed to save task.');
+      setError('Failed to save task or upload documents.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -198,19 +231,42 @@ export function TaskForm() {
               />
             </div>
 
+            {!isEdit && (
+              <div>
+                <label htmlFor="taskDocuments" className="block text-sm font-medium text-gray-700 mb-1">
+                  Upload Documents
+                </label>
+                <input
+                  id="taskDocuments"
+                  type="file"
+                  multiple
+                  onChange={(e) => setSelectedFiles(Array.from(e.target.files || []))}
+                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {selectedFiles.length > 0 && (
+                  <p className="mt-2 text-sm text-gray-600">
+                    {selectedFiles.length} file{selectedFiles.length > 1 ? 's' : ''} selected
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="flex justify-end gap-3 pt-4">
               <button
                 type="button"
                 onClick={() => navigate('/tasks')}
+                disabled={saving}
                 className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="submit"
+                disabled={saving}
                 className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
               >
-                {isEdit ? 'Update Task' : 'Create Task'}
+                {saving ? 'Saving...' : isEdit ? 'Update Task' : 'Create Task'}
               </button>
             </div>
           </form>

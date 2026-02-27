@@ -149,9 +149,51 @@ export function TaskDetails() {
                 <StatusMessage variant="loading" message="Generating plan…" />
               </div>
             )}
-            <p className="text-sm text-gray-500 mb-6">
-              Due {formatDateTime(task.due_date)}
-            </p>
+
+            <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                <div>
+                  <span className="text-gray-500">Due:</span>{' '}
+                  <span className="text-gray-900">{task.due_date ? formatDateTime(task.due_date) : 'Not set'}</span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Category:</span>{' '}
+                  <span className="text-gray-900">{task.category || 'Not set'}</span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Priority:</span>{' '}
+                  <span className="text-gray-900">{task.priority || 'Not set'}</span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Status:</span>{' '}
+                  <span className="text-gray-900">{task.status || 'todo'}</span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Created:</span>{' '}
+                  <span className="text-gray-900">{task.created_at ? formatDateTime(task.created_at) : 'Unknown'}</span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Last Updated:</span>{' '}
+                  <span className="text-gray-900">{task.updated_at ? formatDateTime(task.updated_at) : 'Unknown'}</span>
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <div className="text-sm text-gray-500 mb-1">Notes</div>
+                <div className="text-sm text-gray-800 whitespace-pre-wrap">
+                  {task.notes?.trim() ? task.notes : 'No notes added for this task.'}
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <button
+                  onClick={() => navigate(`/tasks/${taskId}/edit`)}
+                  className="px-3 py-1.5 text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+                >
+                  Edit Task Details
+                </button>
+              </div>
+            </div>
 
             <div className="flex gap-3 mb-8">
               <button

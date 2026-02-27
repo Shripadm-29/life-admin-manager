@@ -73,65 +73,86 @@ export function AIExtraction() {
     );
   }
 
-  const handleConfirm = async () => {
+  const createOrFindTask = async () => {
+    const { data: existing, error: existingErr } = await supabase
+      .from('tasks')
+      .select('*')
+      .ilike('title', extractedTitle || filename)
+      .eq('user_id', user!.id)
+      .limit(1)
+      .maybeSingle();
+
+    if (existingErr) throw existingErr;
+
+    let task: any = existing;
+    if (task) {
+      if (extractedDate && extractedDate !== task.due_date) {
+        const { error: updateErr } = await supabase
+          .from('tasks')
+          .update({ due_date: extractedDate })
+          .eq('id', task.id)
+          .eq('user_id', user!.id);
+        if (updateErr) throw updateErr;
+        task = { ...task, due_date: extractedDate };
+      }
+    } else {
+      const { data: newTask, error: taskErr } = await supabase
+        .from('tasks')
+        .insert({
+          title: extractedTitle || filename,
+          due_date: extractedDate || null,
+          category: 'Academic',
+          priority: 'medium',
+          notes: null,
+          user_id: user!.id,
+        })
+        .select()
+        .single();
+      if (taskErr || !newTask) throw taskErr || new Error('Failed to create task row.');
+      task = newTask;
+    }
+
+    const documentId = location.state?.documentId;
+    if (documentId) {
+      const { error: docUpdateErr } = await supabase
+        .from('documents')
+        .update({ task_id: task.id, extracted_title: extractedTitle, extracted_due_date: extractedDate, extraction_confidence: 1 })
+        .eq('id', documentId)
+        .eq('user_id', user!.id);
+      if (docUpdateErr) throw docUpdateErr;
+    }
+
+    return task;
+  };
+
+  const handleCreateTaskOnly = async () => {
     setActionLoading(true);
+    setError(null);
+    try {
+      const task = await createOrFindTask();
+      navigate('/tasks/' + task.id);
+    } catch (e) {
+      console.error(e);
+      setError('Failed to create task.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleGeneratePlan = async () => {
+    setActionLoading(true);
+    setPlanLoading(true);
     setError(null);
 
     try {
-      // look for existing task with the same title (case-insensitive)
-      const { data: existing } = await supabase
-        .from('tasks')
-        .select('*')
-        .ilike('title', extractedTitle || filename)
-        .eq('user_id', user!.id)
-        .limit(1)
-        .single();
-      let task: any;
-      if (existing) {
-        task = existing;
-        // optionally update due date if new value is provided
-        if (extractedDate && extractedDate !== existing.due_date) {
-          await supabase
-            .from('tasks')
-            .update({ due_date: extractedDate })
-            .eq('id', existing.id);
-          task.due_date = extractedDate;
-        }
-      } else {
-        const { data: newTask, error: taskErr } = await supabase
-          .from('tasks')
-          .insert({
-            title: extractedTitle || filename,
-            due_date: extractedDate || null,
-            category: 'Academic',
-            priority: 'medium',
-            notes: null,
-            user_id: user!.id,
-          })
-          .select()
-          .single();
-        if (taskErr || !newTask) throw taskErr || new Error('no task');
-        task = newTask;
-      }
-
-      // attach document record if we have an id in state
-      const documentId = location.state?.documentId;
-      if (documentId) {
-        await supabase
-          .from('documents')
-          .update({ task_id: task.id, extracted_title: extractedTitle, extracted_due_date: extractedDate, extraction_confidence: 1 })
-          .eq('id', documentId);
-      }
-
-      // generate preview plan immediately
+      const task = await createOrFindTask();
       setCurrentTaskId(task.id);
-      setPlanLoading(true);
       const preview = await getPlanPreview(task.id);
       setPlanPreview(preview);
       setPlanModalOpen(true);
     } catch (e) {
       console.error(e);
-      setError('Failed to create task.');
+      setError('Task created, but failed to generate a plan. You can generate a plan from the task details page.');
     } finally {
       setActionLoading(false);
       setPlanLoading(false);
@@ -251,11 +272,18 @@ export function AIExtraction() {
                 Edit Full Task
               </button>
               <button
-                onClick={handleConfirm}
+                onClick={handleCreateTaskOnly}
                 disabled={actionLoading}
-                className={`px-4 py-2 bg-blue-600 text-white rounded-md transition-colors ${actionLoading ? 'opacity-50 pointer-events-none' : 'hover:bg-blue-700'}`}
+                className={`px-4 py-2 border border-blue-600 text-blue-600 rounded-md transition-colors ${actionLoading ? 'opacity-50 pointer-events-none' : 'hover:bg-blue-50'}`}
               >
-                {actionLoading ? 'Creating…' : 'Confirm & Create Task'}
+                {actionLoading ? 'Creating…' : 'Create Task'}
+              </button>
+              <button
+                onClick={handleGeneratePlan}
+                disabled={actionLoading || planLoading}
+                className={`px-4 py-2 bg-blue-600 text-white rounded-md transition-colors ${actionLoading || planLoading ? 'opacity-50 pointer-events-none' : 'hover:bg-blue-700'}`}
+              >
+                {actionLoading || planLoading ? 'Generating…' : 'Create Task & Generate Plan'}
               </button>
             </div>
           </div>

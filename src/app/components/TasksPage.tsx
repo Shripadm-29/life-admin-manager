@@ -5,7 +5,7 @@ import { useAuth } from '@/app/context/AuthContext';
 import { supabase } from '@/lib/supabaseClient';
 import { StatusMessage } from '@/app/components/ui/status-message';
 import { Task } from '@/app/types';
-import { Plus, Search, Filter } from 'lucide-react';
+import { Plus, Search, Filter, Trash2 } from 'lucide-react';
 
 export function TasksPage() {
   const { user } = useAuth();
@@ -14,6 +14,7 @@ export function TasksPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [deleteLoadingId, setDeleteLoadingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
@@ -61,7 +62,7 @@ export function TasksPage() {
     const matchesPriority = priorityFilter === 'all' || task.priority === priorityFilter;
     
     return matchesSearch && matchesCategory && matchesPriority;
-  });
+  }).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -89,6 +90,45 @@ export function TasksPage() {
       .update({ status: newStatus })
       .eq('id', taskId)
       .eq('user_id', user!.id);
+  };
+
+  const deleteTask = async (taskId: string) => {
+    const confirmed = window.confirm('Delete this task? This cannot be undone.');
+    if (!confirmed) return;
+
+    setDeleteLoadingId(taskId);
+    setError(null);
+
+    try {
+      await supabase
+        .from('documents')
+        .update({ task_id: null })
+        .eq('task_id', taskId)
+        .eq('user_id', user!.id);
+
+      const { error: planItemsError } = await supabase
+        .from('task_plan_items')
+        .delete()
+        .eq('task_id', taskId)
+        .eq('user_id', user!.id);
+      if (planItemsError) {
+        console.warn('Failed to delete task plan items before task delete', planItemsError);
+      }
+
+      const { error: deleteError } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('id', taskId)
+        .eq('user_id', user!.id);
+
+      if (deleteError) throw deleteError;
+      setTasks((prev) => prev.filter((task) => task.id !== taskId));
+    } catch (err) {
+      console.error(err);
+      setError('Failed to delete task.');
+    } finally {
+      setDeleteLoadingId(null);
+    }
   };
 
   return (
@@ -217,10 +257,21 @@ export function TasksPage() {
 
                     <button
                       onClick={(e) => { e.stopPropagation(); navigate(`/tasks/${task.id}/edit`); }}
-                      disabled={loading || !!actionLoading}
-                      className={`px-3 py-1 text-sm text-blue-600 rounded-md transition-colors ${loading || actionLoading ? 'opacity-50 pointer-events-none' : 'hover:bg-blue-50'}`}
+                      disabled={loading || !!actionLoading || !!deleteLoadingId}
+                      className={`px-3 py-1 text-sm text-blue-600 rounded-md transition-colors ${loading || actionLoading || deleteLoadingId ? 'opacity-50 pointer-events-none' : 'hover:bg-blue-50'}`}
                     >
                       Edit
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteTask(task.id);
+                      }}
+                      disabled={loading || !!actionLoading || !!deleteLoadingId}
+                      className={`inline-flex items-center gap-1 px-3 py-1 text-sm text-red-600 rounded-md transition-colors ${loading || actionLoading || deleteLoadingId ? 'opacity-50 pointer-events-none' : 'hover:bg-red-50'}`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      {deleteLoadingId === task.id ? 'Deleting...' : 'Delete'}
                     </button>
                   </div>
                 </div>

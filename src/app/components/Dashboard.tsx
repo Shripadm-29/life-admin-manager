@@ -53,7 +53,8 @@ export function Dashboard() {
     .slice(0, 5);
 
   const overdueTasks = tasks
-    .filter(t => !t.completed && new Date(t.dueDate) < new Date());
+    .filter(t => !t.completed && new Date(t.dueDate) < new Date())
+    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
