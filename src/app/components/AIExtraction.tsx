@@ -60,7 +60,7 @@ export function AIExtraction() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
         <Navigation />
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="bg-white rounded-lg shadow">
@@ -171,7 +171,7 @@ export function AIExtraction() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
         <Navigation />
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <StatusMessage variant="error" message={error} />
@@ -181,7 +181,7 @@ export function AIExtraction() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
       <Navigation />
       
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

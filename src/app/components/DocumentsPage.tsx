@@ -323,11 +323,11 @@ export function DocumentsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
       <Navigation />
       
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8 bg-blue-50 border border-blue-200 rounded-lg p-4">
+      <div className="max-w-[95rem] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-8 bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-xl p-5 shadow-sm">
           <h3 className="font-semibold text-blue-900 mb-2">💡 AI Document Extraction</h3>
           <p className="text-sm text-blue-800">
             Upload documents like syllabi, assignment sheets, or bills, and our AI will automatically 
@@ -336,13 +336,13 @@ export function DocumentsPage() {
         </div>
 
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">Documents</h2>
-              <p className="text-gray-600">Upload and manage your documents</p>
+              <h2 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Documents</h2>
+              <p className="text-gray-600 mt-1">Upload and manage your documents</p>
             </div>
             <div className="flex items-center gap-2">
-              <label className={`inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md transition-colors cursor-pointer ${loading || uploading ? 'opacity-50 pointer-events-none' : 'hover:bg-blue-700'}`}>
+              <label className={`inline-flex items-center px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl transition-all shadow-lg cursor-pointer ${loading || uploading ? 'opacity-50 pointer-events-none' : 'hover:from-indigo-700 hover:to-purple-700 hover:shadow-xl'}`}>
                 <Upload className="w-4 h-4 mr-2" />
                 Upload Document
                 <input
@@ -356,22 +356,22 @@ export function DocumentsPage() {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-4">
+          <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="relative md:col-span-2">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-indigo-400" />
                 <input
                   type="text"
                   placeholder="Search by filename, title, linked task, or uploaded date..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
                 />
               </div>
               <select
                 value={sortOption}
                 onChange={(e) => setSortOption(e.target.value as 'recently_viewed' | 'uploaded_desc' | 'uploaded_asc')}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
               >
                 <option value="recently_viewed">Sort: Recently Viewed</option>
                 <option value="uploaded_desc">Sort: Uploaded (Recent to Old)</option>
@@ -381,7 +381,7 @@ export function DocumentsPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow">
+        <div className="bg-white rounded-xl shadow-xl border border-gray-100">
           {error ? (
             <StatusMessage variant="error" message={error} />
           ) : loading ? (
@@ -397,20 +397,20 @@ export function DocumentsPage() {
               icon={<FileText className="w-12 h-12 mx-auto mb-3 text-gray-400" />}
             />
           ) : (
-            <div className="divide-y divide-gray-200">
+            <div className="divide-y divide-gray-100">
               {sortedDocuments.map(doc => {
                 const linkedTask = getLinkedTask(doc.taskId);
                 return (
-                  <div key={doc.id} className="p-6 hover:bg-gray-50 transition-colors">
+                  <div key={doc.id} className="p-6 hover:bg-gradient-to-r hover:from-indigo-50/30 hover:to-purple-50/30 transition-all">
                     <div className="flex items-start gap-4">
-                      <div className="bg-blue-100 rounded-lg p-3">
-                        <FileText className="w-6 h-6 text-blue-600" />
+                      <div className="bg-gradient-to-br from-indigo-100 to-purple-100 rounded-xl p-3">
+                        <FileText className="w-6 h-6 text-indigo-600" />
                       </div>
                       
                       <div className="flex-1">
                         <h4 className="font-semibold text-gray-900 mb-1">{getDisplayFileName(doc.filePath)}</h4>
                         
-                        <div className="flex items-center gap-4 text-sm text-gray-500 mb-2">
+                        <div className="flex items-center gap-4 text-sm text-gray-500 mb-2 flex-wrap">
                           <div className="flex items-center gap-1">
                             <Calendar className="w-4 h-4" />
                             <span>Uploaded: {formatDate(doc.createdAt)}</span>
@@ -431,18 +431,18 @@ export function DocumentsPage() {
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                         <button
                           onClick={() => handleView(doc)}
                           disabled={!!actionLoadingId || loading}
-                          className={`px-3 py-1 text-sm text-blue-600 rounded-md transition-colors ${actionLoadingId || loading ? 'opacity-50 pointer-events-none' : 'hover:bg-blue-50'}`}
+                          className={`px-3 py-2 text-sm text-blue-600 rounded-md transition-colors ${actionLoadingId || loading ? 'opacity-50 pointer-events-none' : 'hover:bg-blue-50'}`}
                         >
                           {actionLoadingId === `view-${doc.id}` ? 'Opening...' : 'View'}
                         </button>
                         <button
                           onClick={() => handleDownload(doc)}
                           disabled={!!actionLoadingId || loading}
-                          className={`px-3 py-1 text-sm text-gray-600 rounded-md transition-colors ${actionLoadingId || loading ? 'opacity-50 pointer-events-none' : 'hover:bg-gray-100'}`}
+                          className={`px-3 py-2 text-sm text-gray-600 rounded-md transition-colors ${actionLoadingId || loading ? 'opacity-50 pointer-events-none' : 'hover:bg-gray-100'}`}
                         >
                           {actionLoadingId === `download-${doc.id}` ? 'Downloading...' : 'Download'}
                         </button>

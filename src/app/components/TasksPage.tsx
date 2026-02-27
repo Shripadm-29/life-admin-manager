@@ -5,7 +5,7 @@ import { useAuth } from '@/app/context/AuthContext';
 import { supabase } from '@/lib/supabaseClient';
 import { StatusMessage } from '@/app/components/ui/status-message';
 import { Task } from '@/app/types';
-import { Plus, Search, Filter, Trash2 } from 'lucide-react';
+import { Plus, Search, Filter, Trash2, Calendar } from 'lucide-react';
 
 export function TasksPage() {
   const { user } = useAuth();
@@ -132,44 +132,44 @@ export function TasksPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
       <Navigation />
       
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-[95rem] mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">Tasks</h2>
-              <p className="text-gray-600">Manage all your tasks and deadlines</p>
+              <h2 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Tasks</h2>
+              <p className="text-gray-600 mt-1">Manage all your tasks and deadlines</p>
             </div>
             <button
               onClick={() => navigate('/tasks/new')}
-              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              className="inline-flex items-center px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl"
             >
               <Plus className="w-4 h-4 mr-2" />
               Add Task
             </button>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-4">
+          <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-indigo-400" />
                 <input
                   type="text"
                   placeholder="Search tasks..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
                 />
               </div>
 
               <div className="relative">
-                <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <Filter className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-purple-400" />
                 <select
                   value={categoryFilter}
                   onChange={(e) => setCategoryFilter(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all appearance-none bg-white cursor-pointer"
                 >
                   {categories.map(cat => (
                     <option key={cat} value={cat}>
@@ -180,11 +180,11 @@ export function TasksPage() {
               </div>
 
               <div className="relative">
-                <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <Filter className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-pink-400" />
                 <select
                   value={priorityFilter}
                   onChange={(e) => setPriorityFilter(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all appearance-none bg-white cursor-pointer"
                 >
                   {priorities.map(pri => (
                     <option key={pri} value={pri}>
@@ -197,7 +197,7 @@ export function TasksPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow">
+        <div className="bg-white rounded-xl shadow-xl border border-gray-100">
           <div aria-live="polite" className="sr-only" />
           {error ? (
             <StatusMessage variant="error" message={error} />
@@ -208,12 +208,12 @@ export function TasksPage() {
           ) : filteredTasks.length === 0 ? (
             <StatusMessage variant="filtered" message="No tasks match your search or filters. Try clearing filters." />
           ) : (
-            <div className="divide-y divide-gray-200">
+            <div className="divide-y divide-gray-100">
               {filteredTasks.map(task => (
                 <div 
                   key={task.id} 
                   onClick={() => navigate(`/tasks/${task.id}`)}
-                  className={`cursor-pointer p-6 hover:bg-gray-50 transition-colors ${task.completed ? 'opacity-60' : ''}`}
+                  className={`cursor-pointer p-6 hover:bg-gradient-to-r hover:from-indigo-50/30 hover:to-purple-50/30 transition-all ${task.completed ? 'opacity-60' : ''}`}
                 >
                   <div className="flex items-start gap-4">
                     <input
@@ -233,8 +233,8 @@ export function TasksPage() {
                     />
                     
                     <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h4 className={`font-semibold text-gray-900 ${task.completed ? 'line-through' : ''}`}>
+                      <div className="flex items-center gap-3 mb-2 flex-wrap">
+                        <h4 className={`font-semibold text-gray-900 text-lg ${task.completed ? 'line-through' : ''}`}>
                           {task.title}
                         </h4>
                         <span className={`px-2 py-1 text-xs font-medium rounded ${getPriorityColor(task.priority)}`}>
@@ -249,31 +249,33 @@ export function TasksPage() {
                       
                       <p className="text-sm text-gray-600 mb-2">{task.notes}</p>
                       
-                      <div className="flex items-center gap-4 text-sm text-gray-500">
-                        <span>Category: {task.category}</span>
+                      <div className="flex items-center gap-3 sm:gap-4 text-sm text-gray-500 flex-wrap">
+                        <span className="bg-gradient-to-r from-indigo-50 to-purple-50 text-indigo-700 px-3 py-1 rounded-lg font-medium border border-indigo-100">{task.category}</span>
                         <span>•</span>
-                        <span>Due: {formatDate(task.dueDate)}</span>
+                        <span className="flex items-center gap-1"><Calendar className="w-4 h-4" />Due: {formatDate(task.dueDate)}</span>
                       </div>
                     </div>
 
-                    <button
-                      onClick={(e) => { e.stopPropagation(); navigate(`/tasks/${task.id}/edit`); }}
-                      disabled={loading || !!actionLoading || !!deleteLoadingId}
-                      className={`px-3 py-1 text-sm text-blue-600 rounded-md transition-colors ${loading || actionLoading || deleteLoadingId ? 'opacity-50 pointer-events-none' : 'hover:bg-blue-50'}`}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteTask(task.id);
-                      }}
-                      disabled={loading || !!actionLoading || !!deleteLoadingId}
-                      className={`inline-flex items-center gap-1 px-3 py-1 text-sm text-red-600 rounded-md transition-colors ${loading || actionLoading || deleteLoadingId ? 'opacity-50 pointer-events-none' : 'hover:bg-red-50'}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      {deleteLoadingId === task.id ? 'Deleting...' : 'Delete'}
-                    </button>
+                    <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); navigate(`/tasks/${task.id}/edit`); }}
+                        disabled={loading || !!actionLoading || !!deleteLoadingId}
+                        className={`px-4 py-2 text-sm text-indigo-600 rounded-xl transition-all border border-indigo-200 ${loading || actionLoading || deleteLoadingId ? 'opacity-50 pointer-events-none' : 'hover:bg-indigo-50 hover:border-indigo-300'}`}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteTask(task.id);
+                        }}
+                        disabled={loading || !!actionLoading || !!deleteLoadingId}
+                        className={`inline-flex items-center justify-center gap-1 px-3 py-2 text-sm text-red-600 rounded-md transition-colors ${loading || actionLoading || deleteLoadingId ? 'opacity-50 pointer-events-none' : 'hover:bg-red-50'}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        {deleteLoadingId === task.id ? 'Deleting...' : 'Delete'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}

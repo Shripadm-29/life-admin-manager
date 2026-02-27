@@ -195,7 +195,7 @@ export function TaskDetails() {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
       <Navigation />
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <button
@@ -286,7 +286,7 @@ export function TaskDetails() {
               )}
             </div>
 
-            <div className="flex gap-3 mb-8">
+            <div className="flex flex-col sm:flex-row gap-3 mb-8">
               <button
                 onClick={() => handleGenerate(false)}
                 disabled={modalLoading}

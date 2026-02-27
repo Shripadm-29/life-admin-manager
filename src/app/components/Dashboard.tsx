@@ -5,7 +5,7 @@ import { useAuth } from '@/app/context/AuthContext';
 import { supabase } from '@/lib/supabaseClient';
 import { StatusMessage } from '@/app/components/ui/status-message';
 import { Task } from '@/app/types';
-import { Plus, AlertCircle, Clock } from 'lucide-react';
+import { Plus, AlertCircle, Clock, Calendar } from 'lucide-react';
 
 export function Dashboard() {
   const { user } = useAuth();
@@ -71,64 +71,64 @@ export function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
       <Navigation />
       
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-[95rem] mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
-          <p className="text-gray-600">Welcome back! Here's an overview of your tasks.</p>
+          <h2 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Dashboard</h2>
+          <p className="text-gray-600 mt-1">Welcome back! Here's an overview of your tasks.</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="relative overflow-hidden bg-white rounded-xl shadow-lg border border-indigo-100 p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Tasks</p>
-                <p className="text-3xl font-bold text-gray-900">{tasks.length}</p>
+                <p className="text-4xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">{tasks.length}</p>
               </div>
-              <div className="bg-blue-100 rounded-full p-3">
-                <Clock className="w-6 h-6 text-blue-600" />
+              <div className="bg-gradient-to-br from-indigo-500 to-purple-500 rounded-2xl p-4 shadow-lg">
+                <Clock className="w-7 h-7 text-white" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="relative overflow-hidden bg-white rounded-xl shadow-lg border border-green-100 p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Upcoming</p>
-                <p className="text-3xl font-bold text-gray-900">{upcomingTasks.length}</p>
+                <p className="text-4xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">{upcomingTasks.length}</p>
               </div>
-              <div className="bg-green-100 rounded-full p-3">
-                <Clock className="w-6 h-6 text-green-600" />
+              <div className="bg-gradient-to-br from-green-500 to-emerald-500 rounded-2xl p-4 shadow-lg">
+                <Clock className="w-7 h-7 text-white" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="relative overflow-hidden bg-white rounded-xl shadow-lg border border-red-100 p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Overdue</p>
-                <p className="text-3xl font-bold text-gray-900">{overdueTasks.length}</p>
+                <p className="text-4xl font-bold bg-gradient-to-r from-red-600 to-pink-600 bg-clip-text text-transparent">{overdueTasks.length}</p>
               </div>
-              <div className="bg-red-100 rounded-full p-3">
-                <AlertCircle className="w-6 h-6 text-red-600" />
+              <div className="bg-gradient-to-br from-red-500 to-pink-500 rounded-2xl p-4 shadow-lg">
+                <AlertCircle className="w-7 h-7 text-white" />
               </div>
             </div>
           </div>
         </div>
 
         {overdueTasks.length > 0 && (
-          <div className="mb-8 bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="mb-8 bg-gradient-to-r from-red-50 to-pink-50 border-2 border-red-200 rounded-xl p-6 shadow-md">
             <div className="flex items-center">
-              <AlertCircle className="w-5 h-5 text-red-600 mr-2" />
+              <AlertCircle className="w-5 h-5 text-red-600 mr-3" />
               <h3 className="font-semibold text-red-900">
                 You have {overdueTasks.length} overdue task{overdueTasks.length > 1 ? 's' : ''}
               </h3>
             </div>
             <div className="mt-3 space-y-2">
               {overdueTasks.map(task => (
-                <div key={task.id} className="bg-white rounded p-3 flex items-center justify-between">
+                <div key={task.id} className="bg-white rounded-xl p-4 flex items-center justify-between shadow-sm hover:shadow-md transition-shadow">
                   <div>
                     <p className="font-medium text-gray-900">{task.title}</p>
                     <p className="text-sm text-gray-600">Due: {formatDate(task.dueDate)}</p>
@@ -142,18 +142,18 @@ export function Dashboard() {
           </div>
         )}
 
-        <div className="bg-white rounded-lg shadow">
+        <div className="bg-white rounded-xl shadow-xl border border-gray-100">
           {error ? (
             <StatusMessage variant="error" message={error} />
           ) : loading ? (
             <StatusMessage variant="loading" message="Loading dashboard..." />
           ) : (
             <>
-              <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">Upcoming Tasks</h3>
+              <div className="p-6 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-t-xl">
+                <h3 className="text-xl font-semibold text-gray-900">Upcoming Tasks</h3>
                 <button
                   onClick={() => navigate('/tasks/new')}
-                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                  className="inline-flex items-center px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl"
                 >
                   <Plus className="w-4 h-4 mr-2" />
                   Add Task
@@ -163,22 +163,22 @@ export function Dashboard() {
               {upcomingTasks.length === 0 ? (
                 <StatusMessage variant="empty" message="No upcoming tasks. You're all caught up!" />
               ) : (
-                <div className="divide-y divide-gray-200">
+                <div className="divide-y divide-gray-100">
               {upcomingTasks.map(task => (
-                <div key={task.id} className="p-6 hover:bg-gray-50 transition-colors">
+                <div key={task.id} className="p-6 hover:bg-gradient-to-r hover:from-indigo-50/30 hover:to-purple-50/30 transition-all">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
-                        <h4 className="font-semibold text-gray-900">{task.title}</h4>
+                        <h4 className="font-semibold text-gray-900 text-lg">{task.title}</h4>
                         <span className={`px-2 py-1 text-xs font-medium rounded ${getPriorityColor(task.priority)}`}>
                           {task.priority}
                         </span>
                       </div>
                       <p className="text-sm text-gray-600 mb-1">{task.notes}</p>
                       <div className="flex items-center gap-4 text-sm text-gray-500">
-                        <span>Category: {task.category}</span>
+                        <span className="bg-gray-100 px-3 py-1 rounded-lg font-medium">{task.category}</span>
                         <span>•</span>
-                        <span>Due: {formatDate(task.dueDate)}</span>
+                        <span className="flex items-center gap-1"><Calendar className="w-4 h-4" />{formatDate(task.dueDate)}</span>
                       </div>
                     </div>
                   </div>
@@ -187,10 +187,10 @@ export function Dashboard() {
             </div>
           )}
 
-          <div className="p-4 bg-gray-50 border-t border-gray-200">
+          <div className="p-4 bg-gradient-to-r from-gray-50 to-indigo-50 border-t border-gray-200 rounded-b-xl">
             <button
               onClick={() => navigate('/tasks')}
-              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+              className="text-sm text-indigo-600 hover:text-indigo-700 font-semibold hover:underline"
             >
               View all tasks →
             </button>
