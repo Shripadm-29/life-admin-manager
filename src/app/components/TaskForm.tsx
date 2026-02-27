@@ -15,11 +15,48 @@ export function TaskForm() {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('Academic');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
+  const [status, setStatus] = useState<'todo' | 'in_progress' | 'completed'>('todo');
   const [dueDate, setDueDate] = useState('');
+  const [dueHour, setDueHour] = useState('12');
+  const [dueMinute, setDueMinute] = useState('00');
+  const [dueAmPm, setDueAmPm] = useState<'AM' | 'PM'>('PM');
   const [notes, setNotes] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  const toLocalDueFields = (value?: string | null) => {
+    if (!value) {
+      return { date: '', hour: '12', minute: '00', ampm: 'PM' as const };
+    }
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return { date: value, hour: '12', minute: '00', ampm: 'PM' as const };
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return { date: '', hour: '12', minute: '00', ampm: 'PM' as const };
+    }
+
+    const date = `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
+    const hour24 = parsed.getHours();
+    const minute = String(parsed.getMinutes()).padStart(2, '0');
+    const ampm = hour24 >= 12 ? 'PM' : 'AM';
+    const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+
+    return { date, hour: String(hour12), minute, ampm: ampm as 'AM' | 'PM' };
+  };
+
+  const buildDueIso = () => {
+    const hourNum = Math.max(1, Math.min(12, Number(dueHour) || 12));
+    const minuteNum = Math.max(0, Math.min(59, Number(dueMinute) || 0));
+    const hour24 = dueAmPm === 'PM' ? (hourNum === 12 ? 12 : hourNum + 12) : hourNum === 12 ? 0 : hourNum;
+
+    const local = new Date(`${dueDate}T00:00:00`);
+    local.setHours(hour24, minuteNum, 0, 0);
+    return local.toISOString();
+  };
 
   useEffect(() => {
     if (!user) {
@@ -39,7 +76,12 @@ export function TaskForm() {
           setTitle(data.title);
           setCategory(data.category);
           setPriority(data.priority);
-          setDueDate(data.due_date);
+          setStatus((data.status || 'todo') as 'todo' | 'in_progress' | 'completed');
+          const dueFields = toLocalDueFields(data.due_at || data.due_date);
+          setDueDate(dueFields.date);
+          setDueHour(dueFields.hour);
+          setDueMinute(dueFields.minute);
+          setDueAmPm(dueFields.ampm);
           setNotes(data.notes || '');
         }
       })();
@@ -47,14 +89,37 @@ export function TaskForm() {
       // check if navigation state provided defaults (from document extraction etc)
       const state = location.state as any;
       if (state?.prefillTitle) setTitle(state.prefillTitle);
-      if (state?.prefillDate) setDueDate(state.prefillDate);
+      if (state?.prefillDate) {
+        const dueFields = toLocalDueFields(state.prefillDate);
+        setDueDate(dueFields.date);
+        setDueHour(dueFields.hour);
+        setDueMinute(dueFields.minute);
+        setDueAmPm(dueFields.ampm);
+      }
       // we could store linkedDocument in notes or somewhere but skipping for now
     }
   }, [user, navigate, isEdit, id]);
 
   if (!user) return null;
 
-  const categories = ['Academic', 'Finance', 'Career', 'Health', 'Personal', 'Other'];
+  const categories = [
+    'Academic',
+    'Homework',
+    'Project',
+    'Exam',
+    'Finance',
+    'Bills',
+    'Career',
+    'Internship',
+    'Interview',
+    'Health',
+    'Fitness',
+    'Personal',
+    'Family',
+    'Administrative',
+    'Travel',
+    'Other',
+  ];
 
   const uploadDocumentsForTask = async (taskId: string) => {
     if (selectedFiles.length === 0) return;
@@ -92,31 +157,101 @@ export function TaskForm() {
       return;
     }
 
+    const normalizedMinute = String(Math.max(0, Math.min(59, Number(dueMinute) || 0))).padStart(2, '0');
+    setDueMinute(normalizedMinute);
+    const dueDateIso = buildDueIso();
+
     try {
       setSaving(true);
       if (isEdit && id) {
-        await supabase
+        const payloadWithDueAt = {
+          title,
+          category,
+          priority,
+          status,
+          due_date: dueDate,
+          due_at: dueDateIso,
+          notes,
+          updated_at: new Date().toISOString(),
+        };
+
+        const { error: updateErr } = await supabase
           .from('tasks')
-          .update({ title, category, priority, due_date: dueDate, notes })
+          .update(payloadWithDueAt as any)
           .eq('id', id)
           .eq('user_id', user!.id);
-        navigate(`/tasks/${id}`);
-      } else {
-        const { data } = await supabase
-          .from('tasks')
-          .insert({
+
+        if (updateErr && String(updateErr.message || '').toLowerCase().includes('due_at')) {
+          const fallbackPayload = {
             title,
             category,
             priority,
+            status,
+            due_date: dueDate,
+            notes,
+          };
+
+          const { error: fallbackErr } = await supabase
+            .from('tasks')
+            .update(fallbackPayload)
+            .eq('id', id)
+            .eq('user_id', user!.id);
+
+          if (fallbackErr) throw fallbackErr;
+        } else if (updateErr) {
+          throw updateErr;
+        }
+
+        await uploadDocumentsForTask(id);
+
+        navigate(`/tasks/${id}`);
+      } else {
+        const payloadWithDueAt = {
+          title,
+          category,
+          priority,
+          status,
+          due_date: dueDate,
+          due_at: dueDateIso,
+          notes,
+          user_id: user!.id,
+        };
+
+        let insertData: any = null;
+        const { data: insertedWithDueAt, error: insertErr } = await supabase
+          .from('tasks')
+          .insert(payloadWithDueAt as any)
+          .select()
+          .single();
+
+        if (insertErr && String(insertErr.message || '').toLowerCase().includes('due_at')) {
+          const fallbackPayload = {
+            title,
+            category,
+            priority,
+            status,
             due_date: dueDate,
             notes,
             user_id: user!.id,
-          })
-          .select()
-          .single();
-        if (data) {
-          await uploadDocumentsForTask(data.id);
-          navigate(`/tasks/${data.id}`);
+          };
+
+          const { data: insertedFallback, error: fallbackErr } = await supabase
+            .from('tasks')
+            .insert(fallbackPayload)
+            .select()
+            .single();
+
+          if (fallbackErr) throw fallbackErr;
+          insertData = insertedFallback;
+        } else if (insertErr) {
+          throw insertErr;
+        } else {
+          insertData = insertedWithDueAt;
+        }
+
+        if (insertData) {
+          await uploadDocumentsForTask(insertData.id);
+          navigate(`/tasks/${insertData.id}`);
         } else {
           navigate('/tasks');
         }
@@ -202,19 +337,76 @@ export function TaskForm() {
                   <option value="high">High</option>
                 </select>
               </div>
+
+              <div>
+                <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
+                  Status
+                </label>
+                <select
+                  id="status"
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as 'todo' | 'in_progress' | 'completed')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="todo">To Do</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="completed">Completed</option>
+                </select>
+              </div>
             </div>
 
             <div>
               <label htmlFor="dueDate" className="block text-sm font-medium text-gray-700 mb-1">
                 Due Date <span className="text-red-500">*</span>
               </label>
-              <input
-                id="dueDate"
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <input
+                  id="dueDate"
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  className="md:col-span-2 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <div className="md:col-span-2 flex items-center gap-2">
+                  <select
+                    value={dueHour}
+                    onChange={(e) => setDueHour(e.target.value)}
+                    className="w-20 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {Array.from({ length: 12 }, (_, idx) => {
+                      const h = String(idx + 1);
+                      return (
+                        <option key={h} value={h}>
+                          {h}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <span className="text-gray-500 font-medium">:</span>
+                  <input
+                    type="text"
+                    value={dueMinute}
+                    onChange={(e) => setDueMinute(e.target.value.replace(/[^0-9]/g, '').slice(0, 2))}
+                    list="minute-options"
+                    placeholder="00"
+                    className="w-20 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <datalist id="minute-options">
+                    <option value="00" />
+                    <option value="15" />
+                    <option value="30" />
+                    <option value="45" />
+                  </datalist>
+                  <select
+                    value={dueAmPm}
+                    onChange={(e) => setDueAmPm(e.target.value as 'AM' | 'PM')}
+                    className="w-20 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="AM">AM</option>
+                    <option value="PM">PM</option>
+                  </select>
+                </div>
+              </div>
             </div>
 
             <div>
@@ -231,26 +423,24 @@ export function TaskForm() {
               />
             </div>
 
-            {!isEdit && (
-              <div>
-                <label htmlFor="taskDocuments" className="block text-sm font-medium text-gray-700 mb-1">
-                  Upload Documents
-                </label>
-                <input
-                  id="taskDocuments"
-                  type="file"
-                  multiple
-                  onChange={(e) => setSelectedFiles(Array.from(e.target.files || []))}
-                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                {selectedFiles.length > 0 && (
-                  <p className="mt-2 text-sm text-gray-600">
-                    {selectedFiles.length} file{selectedFiles.length > 1 ? 's' : ''} selected
-                  </p>
-                )}
-              </div>
-            )}
+            <div>
+              <label htmlFor="taskDocuments" className="block text-sm font-medium text-gray-700 mb-1">
+                Upload Documents
+              </label>
+              <input
+                id="taskDocuments"
+                type="file"
+                multiple
+                onChange={(e) => setSelectedFiles(Array.from(e.target.files || []))}
+                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              {selectedFiles.length > 0 && (
+                <p className="mt-2 text-sm text-gray-600">
+                  {selectedFiles.length} file{selectedFiles.length > 1 ? 's' : ''} selected
+                </p>
+              )}
+            </div>
 
             <div className="flex justify-end gap-3 pt-4">
               <button

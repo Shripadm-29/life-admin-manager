@@ -16,6 +16,7 @@ export function TaskDetails() {
 
   const [task, setTask] = useState<any>(null);
   const [planItems, setPlanItems] = useState<any[]>([]);
+  const [linkedDocuments, setLinkedDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalPlan, setModalPlan] = useState<PlanItemType[]>([]);
@@ -29,6 +30,7 @@ export function TaskDetails() {
     }
     fetchTask();
     fetchPlanItems();
+    fetchLinkedDocuments();
   }, [user, taskId]);
 
   const fetchTask = async () => {
@@ -72,6 +74,23 @@ export function TaskDetails() {
     }
   };
 
+  const fetchLinkedDocuments = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('documents')
+        .select('id,file_path,created_at')
+        .eq('task_id', taskId)
+        .eq('user_id', user!.id)
+        .order('created_at', { ascending: false });
+
+      if (!error) {
+        setLinkedDocuments(data || []);
+      }
+    } catch (e) {
+      console.error('fetchLinkedDocuments exception', e);
+    }
+  };
+
   const handleGenerate = async (random = false) => {
     console.log('handleGenerate', { taskId, random });
     setModalLoading(true);
@@ -112,11 +131,64 @@ export function TaskDetails() {
     }
   };
 
-  const formatDateTime = (iso: string) => {
+  const parseAppDate = (value?: string | null) => {
+    if (!value) return null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const [year, month, day] = value.split('-').map(Number);
+      return new Date(year, month - 1, day, 12, 0, 0, 0);
+    }
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed;
+  };
+
+  const formatDateTime = (value?: string | null) => {
     try {
-      return format(new Date(iso), 'PP p');
+      const parsed = parseAppDate(value);
+      if (!parsed) return 'Unknown';
+      return format(parsed, 'PP p');
     } catch {
-      return iso;
+      return value || 'Unknown';
+    }
+  };
+
+  const formatUpdatedLabel = (value?: string | null) => {
+    const parsed = parseAppDate(value);
+    if (!parsed) return 'Unknown';
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const updatedDay = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+    const diffDays = Math.round((today.getTime() - updatedDay.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return `Today ${format(parsed, 'p')}`;
+    if (diffDays === 1) return `Yesterday ${format(parsed, 'p')}`;
+    return format(parsed, 'PP p');
+  };
+
+  const getDisplayFileName = (filePath: string) => {
+    if (!filePath) return 'document';
+    const baseName = filePath.split('/').pop() || filePath;
+    const timestampPattern = /^\d{10,}-(?:\d+-)?(.+)$/;
+    const matched = baseName.match(timestampPattern);
+    return matched?.[1] || baseName;
+  };
+
+  const openLinkedDocument = async (doc: any) => {
+    try {
+      const filePath = doc.file_path;
+      if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
+        window.open(filePath, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      const { data, error } = await supabase.storage
+        .from('documents')
+        .createSignedUrl(filePath, 60 * 60);
+      if (error || !data?.signedUrl) throw error || new Error('Could not open document.');
+      window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+    } catch (e) {
+      console.error(e);
+      setError('Failed to open linked document.');
     }
   };
 
@@ -154,7 +226,7 @@ export function TaskDetails() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                 <div>
                   <span className="text-gray-500">Due:</span>{' '}
-                  <span className="text-gray-900">{task.due_date ? formatDateTime(task.due_date) : 'Not set'}</span>
+                  <span className="text-gray-900">{task.due_at || task.due_date ? formatDateTime(task.due_at || task.due_date) : 'Not set'}</span>
                 </div>
                 <div>
                   <span className="text-gray-500">Category:</span>{' '}
@@ -174,7 +246,7 @@ export function TaskDetails() {
                 </div>
                 <div>
                   <span className="text-gray-500">Last Updated:</span>{' '}
-                  <span className="text-gray-900">{task.updated_at ? formatDateTime(task.updated_at) : 'Unknown'}</span>
+                  <span className="text-gray-900">{formatUpdatedLabel(task.updated_at || task.created_at)}</span>
                 </div>
               </div>
 
@@ -193,6 +265,25 @@ export function TaskDetails() {
                   Edit Task Details
                 </button>
               </div>
+
+              {linkedDocuments.length > 0 && (
+                <div className="mt-4 border-t border-gray-200 pt-4">
+                  <div className="text-sm text-gray-500 mb-2">Linked Documents</div>
+                  <div className="space-y-2">
+                    {linkedDocuments.map((doc) => (
+                      <div key={doc.id} className="flex items-center justify-between rounded-md border border-gray-200 px-3 py-2">
+                        <div className="text-sm text-gray-800">{getDisplayFileName(doc.file_path)}</div>
+                        <button
+                          onClick={() => openLinkedDocument(doc)}
+                          className="text-sm text-blue-600 hover:underline"
+                        >
+                          View
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-3 mb-8">
@@ -257,7 +348,7 @@ export function TaskDetails() {
       <AIPlanModal
         open={modalOpen}
         taskTitle={task?.title || ''}
-        taskDue={task?.due_date}
+        taskDue={task?.due_at || task?.due_date}
         previewPlan={modalPlan}
         onAccept={handleAcceptPlan}
         onRegenerate={async () => {

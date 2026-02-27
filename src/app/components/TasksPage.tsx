@@ -40,7 +40,7 @@ export function TasksPage() {
           title: d.title,
           category: d.category,
           priority: d.priority,
-          dueDate: d.due_date,
+          dueDate: d.due_at || d.due_date,
           notes: d.notes || '',
           completed: d.status === 'completed',
         }));
