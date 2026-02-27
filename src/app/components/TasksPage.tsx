@@ -219,6 +219,7 @@ export function TasksPage() {
                     <input
                       type="checkbox"
                       checked={task.completed}
+                      onClick={(e) => e.stopPropagation()}
                       onChange={() => {
                         if (loading || actionLoading) return;
                         setActionLoading(task.id);
