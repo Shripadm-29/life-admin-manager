@@ -23,8 +23,44 @@ export interface Document {
 
 export interface Reminder {
   id: string;
-  taskId: string;
-  taskName: string;
-  reminderDate: string;
-  status: 'scheduled' | 'sent';
+  userId: string;
+  taskId: string | null;
+  title: string;
+  description: string | null;
+  remindAt: string;
+  repeatType: ReminderRepeatType;
+  repeatIntervalDays: number | null;
+  isEnabled: boolean;
+  lastTriggeredAt: string | null;
+  emailSent: boolean;
+  createdAt: string;
+  updatedAt: string;
+  taskTitle?: string | null;
+}
+
+export type ReminderRepeatType =
+  | 'none'
+  | 'daily'
+  | 'weekly'
+  | 'monthly'
+  | 'custom';
+
+export interface NotificationItem {
+  id: string;
+  userId: string;
+  reminderId: string | null;
+  title: string;
+  body: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface ReminderFormValues {
+  title: string;
+  description: string;
+  remindAt: string;
+  repeatType: ReminderRepeatType;
+  repeatIntervalDays: number | null;
+  taskId: string | null;
+  isEnabled: boolean;
 }
