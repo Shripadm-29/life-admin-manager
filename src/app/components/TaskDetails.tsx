@@ -14,9 +14,31 @@ export function TaskDetails() {
   const { id } = useParams();
   const taskId = id!;
 
-  const [task, setTask] = useState<any>(null);
-  const [planItems, setPlanItems] = useState<any[]>([]);
-  const [linkedDocuments, setLinkedDocuments] = useState<any[]>([]);
+  const [task, setTask] = useState<{
+    id: string;
+    title: string;
+    due_at?: string;
+    due_date?: string;
+    category?: string;
+    priority?: string;
+    status?: string;
+    notes?: string;
+    created_at?: string;
+    updated_at?: string;
+  } | null>(null);
+  const [planItems, setPlanItems] = useState<{
+    id: string;
+    title: string;
+    planned_for: string;
+    duration_minutes: number;
+    status: string;
+    checklist?: string[];
+  }[]>([]);
+  const [linkedDocuments, setLinkedDocuments] = useState<{
+    id: string;
+    file_path: string;
+    created_at: string;
+  }[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalPlan, setModalPlan] = useState<PlanItemType[]>([]);
@@ -24,6 +46,62 @@ export function TaskDetails() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const fetchTask = async () => {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('id', taskId)
+        .eq('user_id', user!.id)
+        .single();
+      if (error) {
+        setError('Failed to load task.');
+      } else {
+        setTask(data);
+      }
+      setLoading(false);
+    };
+
+    const fetchPlanItems = async () => {
+      try {
+        const { data, error, status } = await supabase
+          .from('task_plan_items')
+          .select('*')
+          .eq('task_id', taskId)
+          .eq('user_id', user!.id)
+          .order('order_index', { ascending: true });
+
+        if (error) {
+          console.warn('fetchPlanItems error', { error, status });
+          if (status !== 404) {
+            setError('Could not load existing plan items');
+          }
+          return;
+        }
+        if (data) setPlanItems(data);
+      } catch (e) {
+        console.error('fetchPlanItems exception', e);
+        setError('Failed to fetch plan items');
+      }
+    };
+
+    const fetchLinkedDocuments = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('documents')
+          .select('id,file_path,created_at')
+          .eq('task_id', taskId)
+          .eq('user_id', user!.id)
+          .order('created_at', { ascending: false });
+
+        if (!error) {
+          setLinkedDocuments(data || []);
+        }
+      } catch (e) {
+        console.error('fetchLinkedDocuments exception', e);
+      }
+    };
+
     if (!user) {
       navigate('/login');
       return;
@@ -31,23 +109,7 @@ export function TaskDetails() {
     fetchTask();
     fetchPlanItems();
     fetchLinkedDocuments();
-  }, [user, taskId]);
-
-  const fetchTask = async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from('tasks')
-      .select('*')
-      .eq('id', taskId)
-      .eq('user_id', user!.id)
-      .single();
-    if (error) {
-      setError('Failed to load task.');
-    } else {
-      setTask(data);
-    }
-    setLoading(false);
-  };
+  }, [user, taskId, navigate]);
 
   const fetchPlanItems = async () => {
     try {
@@ -59,9 +121,7 @@ export function TaskDetails() {
         .order('order_index', { ascending: true });
 
       if (error) {
-        // RLS or missing table can surface as 404/status 404
         console.warn('fetchPlanItems error', { error, status });
-        // optionally show generic message
         if (status !== 404) {
           setError('Could not load existing plan items');
         }
@@ -71,23 +131,6 @@ export function TaskDetails() {
     } catch (e) {
       console.error('fetchPlanItems exception', e);
       setError('Failed to fetch plan items');
-    }
-  };
-
-  const fetchLinkedDocuments = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('documents')
-        .select('id,file_path,created_at')
-        .eq('task_id', taskId)
-        .eq('user_id', user!.id)
-        .order('created_at', { ascending: false });
-
-      if (!error) {
-        setLinkedDocuments(data || []);
-      }
-    } catch (e) {
-      console.error('fetchLinkedDocuments exception', e);
     }
   };
 
@@ -101,9 +144,10 @@ export function TaskDetails() {
       console.log('plan received', plan);
       setModalPlan(plan);
       setModalOpen(true);
-    } catch (e: any) {
+    } catch (e) {
+      const err = e as { message?: string };
       console.error('generate error', e);
-      const msg = e?.message || String(e);
+      const msg = err?.message || String(e);
       setError(`Could not generate plan: ${msg}`);
     } finally {
       setModalLoading(false);
@@ -121,8 +165,8 @@ export function TaskDetails() {
     }
   };
 
-  const markItemDone = async (item: any) => {
-    const { data, error } = await supabase
+  const markItemDone = async (item: { id: string; status: string }) => {
+    const { error } = await supabase
       .from('task_plan_items')
       .update({ status: item.status === 'todo' ? 'done' : 'todo' })
       .eq('id', item.id);
@@ -174,7 +218,7 @@ export function TaskDetails() {
     return matched?.[1] || baseName;
   };
 
-  const openLinkedDocument = async (doc: any) => {
+  const openLinkedDocument = async (doc: { file_path: string }) => {
     try {
       const filePath = doc.file_path;
       if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
@@ -308,9 +352,8 @@ export function TaskDetails() {
                 {planItems.map(item => (
                   <div
                     key={item.id}
-                    className={`p-4 rounded-md border ${
-                      item.status === 'done' ? 'bg-green-50 opacity-60' : 'bg-white'
-                    }`}
+                    className={`p-4 rounded-md border ${item.status === 'done' ? 'bg-green-50 opacity-60' : 'bg-white'
+                      }`}
                   >
                     <div className="flex justify-between items-center">
                       <div>

@@ -24,7 +24,7 @@ export function RemindersPage() {
     const t = setTimeout(() => {
       try {
         setReminders(mockReminders);
-      } catch (e) {
+      } catch {
         setError('Failed to load reminders.');
       } finally {
         setLoading(false);
@@ -44,20 +44,20 @@ export function RemindersPage() {
     const now = new Date();
     const diffTime = date.getTime() - now.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays === 0) return 'Today';
     if (diffDays === 1) return 'Tomorrow';
     if (diffDays === -1) return 'Yesterday';
     if (diffDays < 0) return `${Math.abs(diffDays)} days ago`;
     if (diffDays > 0) return `In ${diffDays} days`;
-    
+
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
       <Navigation />
-      
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-gray-900">Reminders</h2>
@@ -100,7 +100,7 @@ export function RemindersPage() {
                     <div className="bg-blue-100 rounded-lg p-3">
                       <Bell className="w-5 h-5 text-blue-600" />
                     </div>
-                    
+
                     <div className="flex-1">
                       <h4 className="font-semibold text-gray-900 mb-1">{reminder.taskName}</h4>
                       <div className="flex items-center gap-2 text-sm text-gray-600">
@@ -129,7 +129,7 @@ export function RemindersPage() {
                     <div className="bg-green-100 rounded-lg p-3">
                       <CheckCircle className="w-5 h-5 text-green-600" />
                     </div>
-                    
+
                     <div className="flex-1">
                       <h4 className="font-semibold text-gray-900 mb-1">{reminder.taskName}</h4>
                       <div className="flex items-center gap-2 text-sm text-gray-600">

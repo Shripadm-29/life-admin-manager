@@ -84,7 +84,7 @@ export function AIExtraction() {
 
     if (existingErr) throw existingErr;
 
-    let task: any = existing;
+    let task: { id: string; due_date?: string } | null = existing;
     if (task) {
       if (extractedDate && extractedDate !== task.due_date) {
         const { error: updateErr } = await supabase
@@ -160,12 +160,12 @@ export function AIExtraction() {
   };
 
   const handleEdit = () => {
-    navigate('/tasks/new', { 
-      state: { 
-        prefillTitle: extractedTitle, 
+    navigate('/tasks/new', {
+      state: {
+        prefillTitle: extractedTitle,
         prefillDate: extractedDate,
-        linkedDocument: filename 
-      } 
+        linkedDocument: filename
+      }
     });
   };
 
@@ -183,7 +183,7 @@ export function AIExtraction() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
       <Navigation />
-      
+
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <button
           onClick={() => navigate('/documents')}
@@ -201,7 +201,7 @@ export function AIExtraction() {
               </div>
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">AI Extraction Complete</h2>
-                <p className="text-gray-600">We've extracted the following information from your document</p>
+                <p className="text-gray-600">We&apos;ve extracted the following information from your document</p>
               </div>
             </div>
           </div>
@@ -249,12 +249,10 @@ export function AIExtraction() {
               />
             </div>
 
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <p className="text-sm text-yellow-800">
-                💡 <strong>Tip:</strong> You can confirm these details to quickly create a task, or click "Edit Full Task" 
-                to customize category, priority, and other details.
-              </p>
-            </div>
+            <p className="text-sm text-yellow-800">
+              💡 <strong>Tip:</strong> You can confirm these details to quickly create a task, or click &quot;Edit Full Task&quot;
+              to customize category, priority, and other details.
+            </p>
 
             <div className="flex justify-end gap-3 pt-4">
               <button

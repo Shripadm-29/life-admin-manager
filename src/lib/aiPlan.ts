@@ -12,7 +12,7 @@ interface PreviewResponse {
 }
 
 interface AcceptResponse {
-  insertedItems: any[];  // Row objects from task_plan_items.
+  insertedItems: Record<string, string | number | string[] | null>[];  // Row objects from task_plan_items.
 }
 
 /**
@@ -26,8 +26,8 @@ export const getPlanPreview = async (
 ): Promise<PlanItemType[]> => {
   const headers: Record<string, string> = {};
   const session = await supabase.auth.getSession();
-  if (session.data.session?.accessToken) {
-    headers.Authorization = `Bearer ${session.data.session.accessToken}`;
+  if (session.data.session?.access_token) {
+    headers.Authorization = `Bearer ${session.data.session.access_token}`;
   }
   const { data, error } = await supabase.functions.invoke<PreviewResponse>(
     'ai-plan-preview',
@@ -55,11 +55,11 @@ export const acceptPlan = async (
   taskId: string,
   plan: PlanItemType[],
   regenerate = false,
-): Promise<any[]> => {
+): Promise<Record<string, string | number | string[] | null>[]> => {
   const headers: Record<string, string> = {};
   const session = await supabase.auth.getSession();
-  if (session.data.session?.accessToken) {
-    headers.Authorization = `Bearer ${session.data.session.accessToken}`;
+  if (session.data.session?.access_token) {
+    headers.Authorization = `Bearer ${session.data.session.access_token}`;
   }
   const { data, error } = await supabase.functions.invoke<AcceptResponse>(
     'ai-plan-accept',

@@ -66,7 +66,7 @@ export function TaskForm() {
 
     if (isEdit && id) {
       (async () => {
-        const { data, error } = await supabase
+        const { data } = await supabase
           .from('tasks')
           .select('*')
           .eq('id', id)
@@ -87,7 +87,7 @@ export function TaskForm() {
       })();
     } else if (!isEdit) {
       // check if navigation state provided defaults (from document extraction etc)
-      const state = location.state as any;
+      const state = location.state as { prefillTitle?: string; prefillDate?: string };
       if (state?.prefillTitle) setTitle(state.prefillTitle);
       if (state?.prefillDate) {
         const dueFields = toLocalDueFields(state.prefillDate);
@@ -98,7 +98,7 @@ export function TaskForm() {
       }
       // we could store linkedDocument in notes or somewhere but skipping for now
     }
-  }, [user, navigate, isEdit, id]);
+  }, [user, navigate, isEdit, id, location.state]);
 
   if (!user) return null;
 
@@ -177,7 +177,7 @@ export function TaskForm() {
 
         const { error: updateErr } = await supabase
           .from('tasks')
-          .update(payloadWithDueAt as any)
+          .update(payloadWithDueAt as Record<string, string>)
           .eq('id', id)
           .eq('user_id', user!.id);
 
@@ -217,10 +217,10 @@ export function TaskForm() {
           user_id: user!.id,
         };
 
-        let insertData: any = null;
+        let insertData: { id: string } | null = null;
         const { data: insertedWithDueAt, error: insertErr } = await supabase
           .from('tasks')
-          .insert(payloadWithDueAt as any)
+          .insert(payloadWithDueAt as Record<string, string>)
           .select()
           .single();
 
@@ -267,7 +267,7 @@ export function TaskForm() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
       <Navigation />
-      
+
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <button
           onClick={() => navigate('/tasks')}
