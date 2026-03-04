@@ -6,10 +6,12 @@ import {
   useEffect,
 } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface User {
   id: string;
   email: string;
+  avatarUrl?: string;
 }
 
 interface AuthContextType {
@@ -21,6 +23,7 @@ interface AuthContextType {
     confirmPassword: string,
   ) => Promise<boolean>;
   logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -28,15 +31,28 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
 
+  const mapSupabaseUser = (supabaseUser: SupabaseUser): User => ({
+    id: supabaseUser.id,
+    email: supabaseUser.email || '',
+    avatarUrl:
+      typeof supabaseUser.user_metadata?.avatar_url === 'string'
+        ? supabaseUser.user_metadata.avatar_url
+        : undefined,
+  });
+
+  const refreshUser = async () => {
+    const { data } = await supabase.auth.getUser();
+    if (data.user) {
+      setUser(mapSupabaseUser(data.user));
+    }
+  };
+
   // Sync with supabase session on mount.
   useEffect(() => {
     (async () => {
       const { data } = await supabase.auth.getSession();
       if (data.session?.user) {
-        setUser({
-          id: data.session.user.id,
-          email: data.session.user.email || '',
-        });
+        setUser(mapSupabaseUser(data.session.user));
       }
     })();
   }, []);
@@ -49,10 +65,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (error || !data.session?.user) {
       return false;
     }
-    setUser({
-      id: data.session.user.id,
-      email: data.session.user.email || '',
-    });
+    setUser(mapSupabaseUser(data.session.user));
     return true;
   };
 
@@ -66,7 +79,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (error || !data.user) {
       return false;
     }
-    setUser({ id: data.user.id, email: data.user.email || '' });
+    setUser(mapSupabaseUser(data.user));
     return true;
   };
 
@@ -76,7 +89,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, signup, logout }}>
+    <AuthContext.Provider value={{ user, login, signup, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
