@@ -48,7 +48,9 @@ export function AIPlanModal({
 
   const formatDateTime = (iso: string) => {
     try {
-      return format(new Date(iso), 'PP p');
+      const date = new Date(iso);
+      if (Number.isNaN(date.getTime())) return iso;
+      return format(date, 'PP p');
     } catch {
       return iso;
     }
@@ -71,8 +73,8 @@ export function AIPlanModal({
             previewPlan.map((item, idx) => (
               <div key={idx} className="border rounded-md p-3">
                 <div className="flex justify-between text-sm font-medium mb-1">
-                  <span>{formatDateTime(item.planned_for)}</span>
-                  <span>{item.duration_minutes} min</span>
+                  <span>{formatDateTime((item as any).plannedFor ?? (item as any).planned_for ?? '')}</span>
+                  <span>{(item as any).durationMinutes ?? (item as any).duration_minutes ?? 0} min</span>
                 </div>
                 <div className="font-semibold">{item.title}</div>
                 {item.checklist && item.checklist.length > 0 && (

@@ -2,15 +2,18 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-// Service role for unrestricted access.
-const supabase = createClient(supabaseUrl, supabaseKey);
 const OPENAI_KEY = Deno.env.get('OPENAI_API_KEY');
+const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 if (!OPENAI_KEY) {
   // If the key isn't set, any request should fail early with a helpful error.
   console.error('OPENAI_API_KEY is missing');
 }
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST,OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
 // Very small helper to validate plan items.
 const isValidPlanItem = (obj: any) => {
@@ -79,7 +82,7 @@ const callLLM = async (task: any, slots: any[], random = false) => {
     `Task title: ${task.title}\n` +
     `Category: ${task.category}\n` +
     `Notes: ${task.notes || ''}\n` +
-    `Due date: ${task.dueDate}\n` +
+    `Due date: ${task.due_at || task.due_date || ''}\n` +
     `Slots: ${JSON.stringify(slots)}\n\n` +
     `Generate the session list as described above.`;
   if (random) {
@@ -88,7 +91,7 @@ const callLLM = async (task: any, slots: any[], random = false) => {
   }
 
   if (!OPENAI_KEY) {
-    return new Response('OPENAI_API_KEY not configured', { status: 500 });
+    throw new Error('OPENAI_API_KEY not configured');
   }
   const resp = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -128,33 +131,40 @@ const callLLM = async (task: any, slots: any[], random = false) => {
 serve(async (req) => {
   // Simple CORS support.
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST,OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type,Authorization',
-      },
-    });
+    return new Response(null, { headers: corsHeaders });
   }
 
   if (req.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405 });
+    return new Response('Method not allowed', {
+      status: 405,
+      headers: corsHeaders,
+    });
   }
 
   const authHeader = req.headers.get('Authorization') || '';
-  const token = authHeader.split(' ')[1] || '';
-  const { data: userData, error: userErr } = await supabase.auth.getUser(
-    token,
-  );
+  const projectUrl = new URL(req.url).origin;
+  const supabase = createClient(projectUrl, SUPABASE_ANON_KEY, {
+    global: {
+      headers: {
+        Authorization: authHeader,
+      },
+    },
+  });
+
+  const { data: userData, error: userErr } = await supabase.auth.getUser();
   if (userErr || !userData?.user) {
-    return new Response('Unauthorized', { status: 401 });
+    const reason = userErr?.message || 'No authenticated user in request';
+    return new Response(`Unauthorized: ${reason}`, {
+      status: 401,
+      headers: corsHeaders,
+    });
   }
   const user = userData.user;
 
   const body = await req.json();
   const { taskId, random } = body;
   if (!taskId) {
-    return new Response('taskId required', { status: 400 });
+    return new Response('taskId required', { status: 400, headers: corsHeaders });
   }
 
   const { data: task, error: taskErr } = await supabase
@@ -162,17 +172,31 @@ serve(async (req) => {
     .select('*')
     .eq('id', taskId)
     .single();
-  if (taskErr || !task || task.userId !== user.id) {
-    return new Response('Not found', { status: 404 });
+  if (taskErr || !task || task.user_id !== user.id) {
+    return new Response('Not found', { status: 404, headers: corsHeaders });
   }
+  try {
+    const dueDate = task.due_at || task.due_date;
+    if (!dueDate) {
+      return new Response('Task has no due date', {
+        status: 400,
+        headers: corsHeaders,
+      });
+    }
+    const slots = generateSlots(dueDate, new Date());
+    const plan = await callLLM(task, slots, random === true);
 
-  const slots = generateSlots(task.dueDate, new Date());
-  const plan = await callLLM(task, slots, random === true);
-
-  return new Response(JSON.stringify({ previewPlan: plan }), {
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    },
-  });
+    return new Response(JSON.stringify({ previewPlan: plan }), {
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'application/json',
+      },
+    });
+  } catch (err) {
+    console.error('ai-plan-preview failed', err);
+    return new Response('Failed to generate AI plan preview', {
+      status: 500,
+      headers: corsHeaders,
+    });
+  }
 });

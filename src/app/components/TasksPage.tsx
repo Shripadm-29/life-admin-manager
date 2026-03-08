@@ -115,6 +115,24 @@ export function TasksPage() {
         console.warn('Failed to delete task plan items before task delete', planItemsError);
       }
 
+      const { error: subtasksError } = await supabase
+        .from('subtasks')
+        .delete()
+        .eq('task_id', taskId)
+        .eq('user_id', user!.id);
+      if (subtasksError) {
+        console.warn('Failed to delete subtasks before task delete', subtasksError);
+      }
+
+      const { error: plansError } = await supabase
+        .from('task_plans')
+        .delete()
+        .eq('task_id', taskId)
+        .eq('user_id', user!.id);
+      if (plansError) {
+        console.warn('Failed to delete task_plans before task delete', plansError);
+      }
+
       const { error: deleteError } = await supabase
         .from('tasks')
         .delete()

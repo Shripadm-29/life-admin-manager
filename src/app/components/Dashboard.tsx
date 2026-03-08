@@ -70,6 +70,10 @@ export function Dashboard() {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
+  const openTaskDetails = (taskId: string) => {
+    navigate(`/tasks/${taskId}`);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
       <Navigation />
@@ -81,7 +85,11 @@ export function Dashboard() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="relative overflow-hidden bg-white rounded-xl shadow-lg border border-indigo-100 p-6">
+          <button
+            type="button"
+            onClick={() => navigate('/tasks')}
+            className="relative overflow-hidden bg-white rounded-xl shadow-lg border border-indigo-100 p-6 text-left hover:shadow-xl transition-shadow cursor-pointer"
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Tasks</p>
@@ -91,9 +99,13 @@ export function Dashboard() {
                 <Clock className="w-7 h-7 text-white" />
               </div>
             </div>
-          </div>
+          </button>
 
-          <div className="relative overflow-hidden bg-white rounded-xl shadow-lg border border-green-100 p-6">
+          <button
+            type="button"
+            onClick={() => navigate('/tasks')}
+            className="relative overflow-hidden bg-white rounded-xl shadow-lg border border-green-100 p-6 text-left hover:shadow-xl transition-shadow cursor-pointer"
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Upcoming</p>
@@ -103,9 +115,13 @@ export function Dashboard() {
                 <Clock className="w-7 h-7 text-white" />
               </div>
             </div>
-          </div>
+          </button>
 
-          <div className="relative overflow-hidden bg-white rounded-xl shadow-lg border border-red-100 p-6">
+          <button
+            type="button"
+            onClick={() => navigate('/tasks')}
+            className="relative overflow-hidden bg-white rounded-xl shadow-lg border border-red-100 p-6 text-left hover:shadow-xl transition-shadow cursor-pointer"
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Overdue</p>
@@ -115,7 +131,7 @@ export function Dashboard() {
                 <AlertCircle className="w-7 h-7 text-white" />
               </div>
             </div>
-          </div>
+          </button>
         </div>
 
         {overdueTasks.length > 0 && (
@@ -128,7 +144,12 @@ export function Dashboard() {
             </div>
             <div className="mt-3 space-y-2">
               {overdueTasks.map(task => (
-                <div key={task.id} className="bg-white rounded-xl p-4 flex items-center justify-between shadow-sm hover:shadow-md transition-shadow">
+                <button
+                  type="button"
+                  key={task.id}
+                  onClick={() => openTaskDetails(task.id)}
+                  className="w-full bg-white rounded-xl p-4 flex items-center justify-between shadow-sm hover:shadow-md transition-shadow text-left cursor-pointer"
+                >
                   <div>
                     <p className="font-medium text-gray-900">{task.title}</p>
                     <p className="text-sm text-gray-600">Due: {formatDate(task.dueDate)}</p>
@@ -136,7 +157,7 @@ export function Dashboard() {
                   <span className={`px-2 py-1 text-xs font-medium rounded ${getPriorityColor(task.priority)}`}>
                     {task.priority}
                   </span>
-                </div>
+                </button>
               ))}
             </div>
           </div>
@@ -165,7 +186,12 @@ export function Dashboard() {
               ) : (
                 <div className="divide-y divide-gray-100">
               {upcomingTasks.map(task => (
-                <div key={task.id} className="p-6 hover:bg-gradient-to-r hover:from-indigo-50/30 hover:to-purple-50/30 transition-all">
+                <button
+                  type="button"
+                  key={task.id}
+                  onClick={() => openTaskDetails(task.id)}
+                  className="w-full p-6 hover:bg-gradient-to-r hover:from-indigo-50/30 hover:to-purple-50/30 transition-all text-left cursor-pointer"
+                >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
@@ -182,7 +208,7 @@ export function Dashboard() {
                       </div>
                     </div>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           )}
