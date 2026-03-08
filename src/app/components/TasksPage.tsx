@@ -24,8 +24,6 @@ export function TasksPage() {
       navigate('/login');
       return;
     }
-    setLoading(true);
-    setError(null);
     (async () => {
       const { data, error } = await supabase
         .from('tasks')
@@ -35,12 +33,21 @@ export function TasksPage() {
       if (error) {
         setError('Failed to load tasks.');
       } else {
-        const normalized = (data || []).map((d: any) => ({
+        const normalized = (data || []).map((d: {
+          id: string;
+          title: string;
+          category: string;
+          priority: 'low' | 'medium' | 'high';
+          due_at?: string;
+          due_date?: string;
+          notes?: string;
+          status?: string;
+        }) => ({
           id: d.id,
           title: d.title,
           category: d.category,
           priority: d.priority,
-          dueDate: d.due_at || d.due_date,
+          dueDate: d.due_at || d.due_date || '',
           notes: d.notes || '',
           completed: d.status === 'completed',
         }));
@@ -48,7 +55,8 @@ export function TasksPage() {
       }
       setLoading(false);
     })();
-    return;  }, [user, navigate]);
+    return;
+  }, [user, navigate]);
 
   if (!user) return null;
 
@@ -57,10 +65,10 @@ export function TasksPage() {
 
   const filteredTasks = tasks.filter(task => {
     const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         task.notes.toLowerCase().includes(searchTerm.toLowerCase());
+      task.notes.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = categoryFilter === 'all' || task.category === categoryFilter;
     const matchesPriority = priorityFilter === 'all' || task.priority === priorityFilter;
-    
+
     return matchesSearch && matchesCategory && matchesPriority;
   }).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 
@@ -80,7 +88,7 @@ export function TasksPage() {
 
   const toggleComplete = async (taskId: string, current: boolean) => {
     // optimistic update
-    setTasks(tasks.map(task => 
+    setTasks(tasks.map(task =>
       task.id === taskId ? { ...task, completed: !current } : task
     ));
     // also persist to supabase
@@ -152,7 +160,7 @@ export function TasksPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
       <Navigation />
-      
+
       <div className="max-w-[95rem] mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
@@ -222,14 +230,14 @@ export function TasksPage() {
           ) : loading ? (
             <StatusMessage variant="loading" message="Loading tasks..." />
           ) : tasks.length === 0 ? (
-            <StatusMessage variant="empty" message={'No tasks yet. Click "Add Task" to create your first task.'} />
+            <StatusMessage variant="empty" message={'No tasks yet. Click &quot;Add Task&quot; to create your first task.'} />
           ) : filteredTasks.length === 0 ? (
             <StatusMessage variant="filtered" message="No tasks match your search or filters. Try clearing filters." />
           ) : (
             <div className="divide-y divide-gray-100">
               {filteredTasks.map(task => (
-                <div 
-                  key={task.id} 
+                <div
+                  key={task.id}
                   onClick={() => navigate(`/tasks/${task.id}`)}
                   className={`cursor-pointer p-6 hover:bg-gradient-to-r hover:from-indigo-50/30 hover:to-purple-50/30 transition-all ${task.completed ? 'opacity-60' : ''}`}
                 >
@@ -249,7 +257,7 @@ export function TasksPage() {
                       disabled={!!actionLoading || loading}
                       className="mt-1 w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                     />
-                    
+
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2 flex-wrap">
                         <h4 className={`font-semibold text-gray-900 text-lg ${task.completed ? 'line-through' : ''}`}>
@@ -264,9 +272,9 @@ export function TasksPage() {
                           </span>
                         )}
                       </div>
-                      
+
                       <p className="text-sm text-gray-600 mb-2">{task.notes}</p>
-                      
+
                       <div className="flex items-center gap-3 sm:gap-4 text-sm text-gray-500 flex-wrap">
                         <span className="bg-gradient-to-r from-indigo-50 to-purple-50 text-indigo-700 px-3 py-1 rounded-lg font-medium border border-indigo-100">{task.category}</span>
                         <span>•</span>

@@ -12,7 +12,7 @@ export function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    
+
     if (!email || !password) {
       setError('Please fill in all fields');
       return;
@@ -95,7 +95,7 @@ export function Login() {
             </button>
 
             <p className="text-center text-sm text-gray-600">
-              Don't have an account?{' '}
+              Don&apos;t have an account?{' '}
               <Link to="/signup" className="text-indigo-600 hover:text-indigo-700 font-semibold hover:underline">
                 Sign up
               </Link>

@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react';
+import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, DialogClose } from '@/app/components/ui/dialog';
 import { Button } from '@/app/components/ui/button';
 import { format } from 'date-fns';
@@ -60,7 +60,7 @@ export function AIPlanModal({
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>AI suggested plan for "{taskTitle}"</DialogTitle>
+          <DialogTitle>AI suggested plan for &quot;{taskTitle}&quot;</DialogTitle>
           {taskDue && (
             <DialogDescription>Due {formatDateTime(taskDue)}</DialogDescription>
           )}

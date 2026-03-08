@@ -25,8 +25,6 @@ export function DocumentsPage() {
       navigate('/login');
       return;
     }
-    setLoading(true);
-    setError(null);
     (async () => {
       const [{ data: docs, error: docsErr }, { data: tasks, error: tasksErr }] = await Promise.all([
         supabase
@@ -38,12 +36,19 @@ export function DocumentsPage() {
           .from('tasks')
           .select('id,title')
           .eq('user_id', user!.id),
-      ] as any);
+      ]);
       if (docsErr) {
         setError('Failed to load documents.');
       } else {
-        // Normalize snake_case from database to camelCase.
-        const normalized = (docs || []).map((d: any) => ({
+        const normalized = (docs || []).map((d: {
+          id: string;
+          file_path: string;
+          task_id?: string;
+          extracted_title?: string;
+          extracted_due_date?: string;
+          extraction_confidence?: number;
+          created_at: string;
+        }) => ({
           id: d.id,
           filePath: d.file_path,
           taskId: d.task_id,
@@ -55,8 +60,8 @@ export function DocumentsPage() {
         setDocuments(normalized);
       }
       if (!tasksErr && tasks) {
-        const map: Record<string,string> = {};
-        tasks.forEach((t: any) => (map[t.id] = t.title));
+        const map: Record<string, string> = {};
+        tasks.forEach((t: { id: string; title: string }) => (map[t.id] = t.title));
         setTaskMap(map);
       }
       setLoading(false);
@@ -256,7 +261,7 @@ export function DocumentsPage() {
         const next = { ...prev, [doc.id]: now };
         try {
           localStorage.setItem(`documents_recently_viewed_${user!.id}`, JSON.stringify(next));
-        } catch {}
+        } catch { }
         return next;
       });
     } catch (err) {
@@ -325,12 +330,12 @@ export function DocumentsPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
       <Navigation />
-      
+
       <div className="max-w-[95rem] mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8 bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-xl p-5 shadow-sm">
           <h3 className="font-semibold text-blue-900 mb-2">💡 AI Document Extraction</h3>
           <p className="text-sm text-blue-800">
-            Upload documents like syllabi, assignment sheets, or bills, and our AI will automatically 
+            Upload documents like syllabi, assignment sheets, or bills, and our AI will automatically
             extract important dates and create tasks for you.
           </p>
         </div>
@@ -399,21 +404,21 @@ export function DocumentsPage() {
           ) : (
             <div className="divide-y divide-gray-100">
               {sortedDocuments.map(doc => {
-                const linkedTask = getLinkedTask(doc.taskId);
+                const linkedTask = doc.taskId ? getLinkedTask(doc.taskId) : null;
                 return (
                   <div key={doc.id} className="p-6 hover:bg-gradient-to-r hover:from-indigo-50/30 hover:to-purple-50/30 transition-all">
                     <div className="flex items-start gap-4">
                       <div className="bg-gradient-to-br from-indigo-100 to-purple-100 rounded-xl p-3">
                         <FileText className="w-6 h-6 text-indigo-600" />
                       </div>
-                      
+
                       <div className="flex-1">
                         <h4 className="font-semibold text-gray-900 mb-1">{getDisplayFileName(doc.filePath)}</h4>
-                        
+
                         <div className="flex items-center gap-4 text-sm text-gray-500 mb-2 flex-wrap">
                           <div className="flex items-center gap-1">
                             <Calendar className="w-4 h-4" />
-                            <span>Uploaded: {formatDate(doc.createdAt)}</span>
+                            <span>Uploaded: {doc.createdAt ? formatDate(doc.createdAt) : 'Unknown'}</span>
                           </div>
                         </div>
 
