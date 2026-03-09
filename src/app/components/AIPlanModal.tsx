@@ -71,8 +71,8 @@ export function AIPlanModal({
             previewPlan.map((item, idx) => (
               <div key={idx} className="border rounded-md p-3">
                 <div className="flex justify-between text-sm font-medium mb-1">
-                  <span>{formatDateTime(item.planned_for)}</span>
-                  <span>{item.duration_minutes} min</span>
+                  <span>{formatDateTime(item.plannedFor)}</span>
+                  <span>{item.durationMinutes} min</span>
                 </div>
                 <div className="font-semibold">{item.title}</div>
                 {item.checklist && item.checklist.length > 0 && (
