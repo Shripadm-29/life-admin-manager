@@ -9,16 +9,28 @@ import {
   Menu,
   X,
   LogOut,
+  Check,
 } from 'lucide-react';
 import { useAuth } from '@/app/context/AuthContext';
+import {
+  getUnreadNotificationCount,
+  listNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+} from '@/lib/notifications';
+import { NotificationItem } from '@/app/types';
 
 export function Navigation() {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const { user, logout } = useAuth();
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
+  const notificationsRef = useRef<HTMLDivElement | null>(null);
 
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -32,7 +44,47 @@ export function Navigation() {
     navigate('/login');
     setMobileOpen(false);
     setProfileMenuOpen(false);
+    setNotificationsOpen(false);
   };
+
+  const loadNotifications = async (currentUserId: string) => {
+    const [items, unread] = await Promise.all([
+      listNotifications(currentUserId, 8),
+      getUnreadNotificationCount(currentUserId),
+    ]);
+
+    setNotifications(items);
+    setUnreadCount(unread);
+  };
+
+  const handleMarkRead = async (notificationId: string) => {
+    if (!user) return;
+    await markNotificationRead(notificationId, user.id);
+    await loadNotifications(user.id);
+  };
+
+  const handleMarkAllRead = async () => {
+    if (!user) return;
+    await markAllNotificationsRead(user.id);
+    await loadNotifications(user.id);
+  };
+
+  useEffect(() => {
+    if (!user) return;
+
+    loadNotifications(user.id).catch(() => {
+      setNotifications([]);
+      setUnreadCount(0);
+    });
+
+    const intervalId = window.setInterval(() => {
+      loadNotifications(user.id).catch(() => undefined);
+    }, 30000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [user]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -42,11 +94,19 @@ export function Navigation() {
       ) {
         setProfileMenuOpen(false);
       }
+
+      if (
+        notificationsRef.current &&
+        !notificationsRef.current.contains(event.target as Node)
+      ) {
+        setNotificationsOpen(false);
+      }
     };
 
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setProfileMenuOpen(false);
+        setNotificationsOpen(false);
       }
     };
 
@@ -101,6 +161,81 @@ export function Navigation() {
 
           <div className="flex items-center justify-end gap-2">
             <div
+              ref={notificationsRef}
+              className="hidden sm:block relative"
+            >
+              <button
+                type="button"
+                className="relative inline-flex items-center justify-center w-11 h-11 rounded-full bg-white/20 border border-white/30 text-white hover:bg-white/25 transition-colors"
+                onClick={() => {
+                  setNotificationsOpen((prev) => !prev);
+                  setProfileMenuOpen(false);
+                }}
+                aria-label="Open notifications"
+                aria-haspopup="menu"
+                aria-expanded={notificationsOpen}
+              >
+                <Bell className="w-5 h-5" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-red-500 text-white text-[10px] leading-5 font-semibold text-center">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              <div
+                className={`absolute right-0 top-full mt-2 w-80 rounded-md bg-white shadow-lg border border-gray-200 transition-all z-20 ${
+                  notificationsOpen ? 'opacity-100 visible' : 'opacity-0 invisible'
+                }`}
+              >
+                <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                  <p className="text-sm font-semibold text-gray-900">Notifications</p>
+                  <button
+                    type="button"
+                    onClick={handleMarkAllRead}
+                    className="text-xs text-blue-600 hover:text-blue-700"
+                  >
+                    Mark all read
+                  </button>
+                </div>
+                <div className="max-h-72 overflow-y-auto">
+                  {notifications.length === 0 ? (
+                    <p className="px-4 py-4 text-sm text-gray-500">No notifications yet.</p>
+                  ) : (
+                    notifications.map((notification) => (
+                      <div
+                        key={notification.id}
+                        className={`px-4 py-3 border-b border-gray-100 ${
+                          notification.isRead ? 'bg-white' : 'bg-blue-50/40'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">{notification.title}</p>
+                            <p className="text-xs text-gray-600 mt-1">{notification.body}</p>
+                            <p className="text-[11px] text-gray-500 mt-1">
+                              {new Date(notification.createdAt).toLocaleString()}
+                            </p>
+                          </div>
+                          {!notification.isRead && (
+                            <button
+                              type="button"
+                              onClick={() => handleMarkRead(notification.id)}
+                              className="inline-flex items-center justify-center w-7 h-7 rounded-md text-blue-600 hover:bg-blue-100"
+                              aria-label="Mark notification as read"
+                            >
+                              <Check className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div
               ref={profileMenuRef}
               className="hidden sm:block relative group"
               onMouseEnter={() => setProfileMenuOpen(true)}
@@ -112,7 +247,10 @@ export function Navigation() {
                 aria-label="Open profile menu"
                 aria-haspopup="menu"
                 aria-expanded={profileMenuOpen}
-                onClick={() => setProfileMenuOpen((prev) => !prev)}
+                onClick={() => {
+                  setProfileMenuOpen((prev) => !prev);
+                  setNotificationsOpen(false);
+                }}
               >
                 {user?.avatarUrl ? (
                   <img src={user.avatarUrl} alt="Profile" className="w-full h-full object-cover" />

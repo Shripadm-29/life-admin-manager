@@ -3,8 +3,19 @@ import { useNavigate, useParams } from 'react-router';
 import { Navigation } from '@/app/components/Navigation';
 import { useAuth } from '@/app/context/AuthContext';
 import { supabase } from '@/lib/supabaseClient';
-import { AIPlanModal } from '@/app/components/AIPlanModal';
-import { getPlanPreview, acceptPlan, regeneratePlan, PlanItemType } from '@/lib/aiPlan';
+import { getPlanPreview, regeneratePlan } from '@/lib/aiPlan';
+import {
+  TaskPlanRecord,
+  SubtaskRecord,
+  getLatestTaskPlan,
+  listSubtasks,
+  saveDraftPlan,
+  acceptDraftPlan,
+  skipDraftPlan,
+  addSubtask,
+  toggleSubtask,
+  planItemsToSteps,
+} from '@/lib/taskPlanning';
 import { format } from 'date-fns';
 import { StatusMessage } from '@/app/components/ui/status-message';
 
@@ -14,104 +25,47 @@ export function TaskDetails() {
   const { id } = useParams();
   const taskId = id!;
 
-  const [task, setTask] = useState<{
-    id: string;
-    title: string;
-    due_at?: string;
-    due_date?: string;
-    category?: string;
-    priority?: string;
-    status?: string;
-    notes?: string;
-    created_at?: string;
-    updated_at?: string;
-  } | null>(null);
-  const [planItems, setPlanItems] = useState<{
-    id: string;
-    title: string;
-    planned_for: string;
-    duration_minutes: number;
-    status: string;
-    checklist?: string[];
-  }[]>([]);
-  const [linkedDocuments, setLinkedDocuments] = useState<{
-    id: string;
-    file_path: string;
-    created_at: string;
-  }[]>([]);
+  const [task, setTask] = useState<any>(null);
+  const [taskPlan, setTaskPlan] = useState<TaskPlanRecord | null>(null);
+  const [subtasks, setSubtasks] = useState<SubtaskRecord[]>([]);
+  const [legacyPlanItems, setLegacyPlanItems] = useState<any[]>([]);
+  const [linkedDocuments, setLinkedDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalPlan, setModalPlan] = useState<PlanItemType[]>([]);
-  const [modalLoading, setModalLoading] = useState(false);
+  const [planningLoading, setPlanningLoading] = useState(false);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
+  const [savingSubtask, setSavingSubtask] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchTask = async () => {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('tasks')
-        .select('*')
-        .eq('id', taskId)
-        .eq('user_id', user!.id)
-        .single();
-      if (error) {
-        setError('Failed to load task.');
-      } else {
-        setTask(data);
-      }
-      setLoading(false);
-    };
-
-    const fetchPlanItems = async () => {
-      try {
-        const { data, error, status } = await supabase
-          .from('task_plan_items')
-          .select('*')
-          .eq('task_id', taskId)
-          .eq('user_id', user!.id)
-          .order('order_index', { ascending: true });
-
-        if (error) {
-          console.warn('fetchPlanItems error', { error, status });
-          if (status !== 404) {
-            setError('Could not load existing plan items');
-          }
-          return;
-        }
-        if (data) setPlanItems(data);
-      } catch (e) {
-        console.error('fetchPlanItems exception', e);
-        setError('Failed to fetch plan items');
-      }
-    };
-
-    const fetchLinkedDocuments = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('documents')
-          .select('id,file_path,created_at')
-          .eq('task_id', taskId)
-          .eq('user_id', user!.id)
-          .order('created_at', { ascending: false });
-
-        if (!error) {
-          setLinkedDocuments(data || []);
-        }
-      } catch (e) {
-        console.error('fetchLinkedDocuments exception', e);
-      }
-    };
-
     if (!user) {
       navigate('/login');
       return;
     }
-    fetchTask();
-    fetchPlanItems();
-    fetchLinkedDocuments();
-  }, [user, taskId, navigate]);
+    loadTaskPage();
+  }, [user, taskId]);
 
-  const fetchPlanItems = async () => {
+  const loadTaskPage = async () => {
+    setLoading(true);
+    setError(null);
+    await Promise.all([fetchTask(), fetchPlanningState(), fetchLinkedDocuments()]);
+    setLoading(false);
+  };
+
+  const fetchTask = async () => {
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('id', taskId)
+      .eq('user_id', user!.id)
+      .single();
+    if (error) {
+      setError('Failed to load task.');
+    } else {
+      setTask(data);
+    }
+  };
+
+  const fetchLegacyPlanItems = async () => {
     try {
       const { data, error, status } = await supabase
         .from('task_plan_items')
@@ -121,57 +75,168 @@ export function TaskDetails() {
         .order('order_index', { ascending: true });
 
       if (error) {
+        // RLS or missing table can surface as 404/status 404
         console.warn('fetchPlanItems error', { error, status });
+        // optionally show generic message
         if (status !== 404) {
           setError('Could not load existing plan items');
         }
         return;
       }
-      if (data) setPlanItems(data);
+      if (data) setLegacyPlanItems(data);
     } catch (e) {
-      console.error('fetchPlanItems exception', e);
-      setError('Failed to fetch plan items');
+      console.error('fetchLegacyPlanItems exception', e);
     }
   };
 
-  const handleGenerate = async (random = false) => {
-    console.log('handleGenerate', { taskId, random });
-    setModalLoading(true);
+  const fetchPlanningState = async () => {
     try {
-      const plan = random
+      const [latestPlan, currentSubtasks] = await Promise.all([
+        getLatestTaskPlan(taskId, user!.id),
+        listSubtasks(taskId, user!.id),
+      ]);
+      setTaskPlan(latestPlan);
+      setSubtasks(currentSubtasks);
+      setLegacyPlanItems([]);
+    } catch (e) {
+      // Fall back to legacy plan item model so existing users are not blocked.
+      console.warn('New planning tables unavailable, using legacy model.', e);
+      setTaskPlan(null);
+      setSubtasks([]);
+      await fetchLegacyPlanItems();
+    }
+  };
+
+  const fetchLinkedDocuments = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('documents')
+        .select('id,file_path,created_at')
+        .eq('task_id', taskId)
+        .eq('user_id', user!.id)
+        .order('created_at', { ascending: false });
+
+      if (!error) {
+        setLinkedDocuments(data || []);
+      }
+    } catch (e) {
+      console.error('fetchLinkedDocuments exception', e);
+    }
+  };
+
+  const handleGenerateDraft = async (random = false) => {
+    setPlanningLoading(true);
+    setError(null);
+    try {
+      const previewPlan = random
         ? await regeneratePlan(taskId)
         : await getPlanPreview(taskId);
-      console.log('plan received', plan);
-      setModalPlan(plan);
-      setModalOpen(true);
-    } catch (e) {
-      const err = e as { message?: string };
+
+      const steps = planItemsToSteps(previewPlan);
+      const savedDraft = await saveDraftPlan(taskId, user!.id, steps);
+      setTaskPlan(savedDraft);
+    } catch (e: any) {
       console.error('generate error', e);
-      const msg = err?.message || String(e);
-      setError(`Could not generate plan: ${msg}`);
+      const msg = e?.message || String(e);
+      setError(`Could not generate draft plan: ${msg}`);
     } finally {
-      setModalLoading(false);
+      setPlanningLoading(false);
     }
   };
 
-  const handleAcceptPlan = async (plan: PlanItemType[]) => {
+  const handleAcceptDraft = async () => {
+    if (!taskPlan || taskPlan.status !== 'draft') return;
+
+    const hasExistingSubtasks = subtasks.length > 0 || legacyPlanItems.length > 0;
+    const replaceExisting = hasExistingSubtasks
+      ? window.confirm('Replace existing subtasks with this new plan? Click Cancel to keep existing subtasks and append the draft steps.')
+      : false;
+
+    setPlanningLoading(true);
+    setError(null);
     try {
-      await acceptPlan(taskId, plan, true); // wipe previous if any
-      setModalOpen(false);
-      fetchPlanItems();
-    } catch (e) {
+      await acceptDraftPlan(taskId, user!.id, taskPlan.id, replaceExisting);
+      await fetchPlanningState();
+    } catch (e: any) {
       console.error(e);
-      setError('Failed to save plan.');
+      setError(`Failed to accept plan: ${e?.message || 'unknown error'}`);
+    } finally {
+      setPlanningLoading(false);
     }
   };
 
-  const markItemDone = async (item: { id: string; status: string }) => {
+  const handleSkipDraft = async () => {
+    if (!taskPlan || taskPlan.status !== 'draft') return;
+    setPlanningLoading(true);
+    setError(null);
+    try {
+      await skipDraftPlan(taskPlan.id, user!.id);
+      await fetchPlanningState();
+    } catch (e: any) {
+      setError(`Failed to skip draft plan: ${e?.message || 'unknown error'}`);
+    } finally {
+      setPlanningLoading(false);
+    }
+  };
+
+  const handleEditPlanFromAccepted = async () => {
+    const sourceSteps = subtasks.length
+      ? subtasks.map((s) => s.title)
+      : legacyPlanItems.map((p) => p.title);
+
+    if (!sourceSteps.length) {
+      setError('No accepted subtasks found to edit.');
+      return;
+    }
+
+    setPlanningLoading(true);
+    setError(null);
+    try {
+      const draft = await saveDraftPlan(taskId, user!.id, sourceSteps);
+      setTaskPlan(draft);
+    } catch (e: any) {
+      setError(`Failed to open draft for editing: ${e?.message || 'unknown error'}`);
+    } finally {
+      setPlanningLoading(false);
+    }
+  };
+
+  const markLegacyItemDone = async (item: any) => {
     const { error } = await supabase
       .from('task_plan_items')
       .update({ status: item.status === 'todo' ? 'done' : 'todo' })
       .eq('id', item.id);
+
     if (!error) {
-      fetchPlanItems();
+      fetchLegacyPlanItems();
+    }
+  };
+
+  const handleToggleSubtask = async (item: SubtaskRecord) => {
+    try {
+      await toggleSubtask(item.id, user!.id, !item.completed);
+      await fetchPlanningState();
+    } catch (e: any) {
+      setError(`Failed to update subtask: ${e?.message || 'unknown error'}`);
+    }
+  };
+
+  const handleAddSubtask = async () => {
+    if (!newSubtaskTitle.trim()) {
+      setError('Subtask title cannot be empty.');
+      return;
+    }
+
+    setSavingSubtask(true);
+    setError(null);
+    try {
+      await addSubtask(taskId, user!.id, newSubtaskTitle);
+      setNewSubtaskTitle('');
+      await fetchPlanningState();
+    } catch (e: any) {
+      setError(`Failed to add subtask: ${e?.message || 'unknown error'}`);
+    } finally {
+      setSavingSubtask(false);
     }
   };
 
@@ -218,7 +283,7 @@ export function TaskDetails() {
     return matched?.[1] || baseName;
   };
 
-  const openLinkedDocument = async (doc: { file_path: string }) => {
+  const openLinkedDocument = async (doc: any) => {
     try {
       const filePath = doc.file_path;
       if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
@@ -237,6 +302,14 @@ export function TaskDetails() {
   };
 
   if (!user) return null;
+
+  const planningState: 'none' | 'draft' | 'accepted' | 'skipped' = taskPlan?.status === 'draft'
+    ? 'draft'
+    : taskPlan?.status === 'accepted' || subtasks.length > 0 || legacyPlanItems.length > 0
+      ? 'accepted'
+      : taskPlan?.status === 'skipped'
+        ? 'skipped'
+        : 'none';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
@@ -260,7 +333,7 @@ export function TaskDetails() {
         ) : task ? (
           <>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">{task.title}</h2>
-            {modalLoading && (
+            {planningLoading && (
               <div className="my-4">
                 <StatusMessage variant="loading" message="Generating plan…" />
               </div>
@@ -295,9 +368,11 @@ export function TaskDetails() {
               </div>
 
               <div className="mt-4">
-                <div className="text-sm text-gray-500 mb-1">Notes</div>
+                <div className="text-sm text-gray-500 mb-1">Description</div>
                 <div className="text-sm text-gray-800 whitespace-pre-wrap">
-                  {task.notes?.trim() ? task.notes : 'No notes added for this task.'}
+                  {(task.description || task.notes)?.trim()
+                    ? (task.description || task.notes)
+                    : 'No description added for this task.'}
                 </div>
               </div>
 
@@ -330,30 +405,136 @@ export function TaskDetails() {
               )}
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3 mb-8">
-              <button
-                onClick={() => handleGenerate(false)}
-                disabled={modalLoading}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-              >
-                {modalLoading ? 'Generating…' : 'Generate Plan'}
-              </button>
-              <button
-                onClick={() => handleGenerate(true)}
-                disabled={modalLoading}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
-              >
-                {modalLoading ? 'Generating…' : 'Regenerate Plan'}
-              </button>
-            </div>
+            {(planningState === 'none' || planningState === 'skipped') && (
+              <div className="mb-8 rounded-lg border border-blue-200 bg-blue-50 p-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <div className="font-semibold text-blue-900">
+                      {planningState === 'skipped' ? 'AI plan skipped' : 'No AI plan yet'}
+                    </div>
+                    <div className="text-sm text-blue-700">
+                      Generate a draft plan to break this task into actionable subtasks.
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleGenerateDraft(false)}
+                    disabled={planningLoading}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                  >
+                    {planningLoading ? 'Generating…' : 'Generate Plan'}
+                  </button>
+                </div>
+              </div>
+            )}
 
-            {planItems.length > 0 ? (
+            {planningState === 'draft' && taskPlan && (
+              <div className="mb-8 rounded-lg border border-amber-200 bg-amber-50 p-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+                  <div>
+                    <div className="font-semibold text-amber-900">Draft Plan (v{taskPlan.version})</div>
+                    <div className="text-sm text-amber-700">Preview the suggested steps before turning them into real subtasks.</div>
+                  </div>
+                </div>
+
+                <ul className="mb-4 list-disc ml-5 text-sm text-gray-800 space-y-1">
+                  {(taskPlan.steps || []).map((step, idx) => (
+                    <li key={`${idx}-${step}`}>{step}</li>
+                  ))}
+                </ul>
+
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <button
+                    onClick={handleAcceptDraft}
+                    disabled={planningLoading}
+                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                  >
+                    Accept Plan
+                  </button>
+                  <button
+                    onClick={() => handleGenerateDraft(true)}
+                    disabled={planningLoading}
+                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+                  >
+                    Regenerate
+                  </button>
+                  <button
+                    onClick={handleSkipDraft}
+                    disabled={planningLoading}
+                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+                  >
+                    Skip for Now
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {planningState === 'accepted' && (
+              <div className="flex flex-col sm:flex-row gap-3 mb-5">
+                <button
+                  onClick={handleEditPlanFromAccepted}
+                  disabled={planningLoading}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+                >
+                  Edit Plan
+                </button>
+                <button
+                  onClick={() => handleGenerateDraft(true)}
+                  disabled={planningLoading}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+                >
+                  Regenerate Plan
+                </button>
+              </div>
+            )}
+
+            {subtasks.length > 0 ? (
               <div className="space-y-4">
-                {planItems.map(item => (
+                {subtasks.map((item) => (
                   <div
                     key={item.id}
-                    className={`p-4 rounded-md border ${item.status === 'done' ? 'bg-green-50 opacity-60' : 'bg-white'
-                      }`}
+                    className={`p-4 rounded-md border ${
+                      item.completed ? 'bg-green-50 opacity-60' : 'bg-white'
+                    }`}
+                  >
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <div className="font-semibold">{item.title}</div>
+                      </div>
+                      <button
+                        onClick={() => handleToggleSubtask(item)}
+                        className="text-blue-600 text-sm underline"
+                      >
+                        {item.completed ? 'Undo' : 'Mark done'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="text"
+                    value={newSubtaskTitle}
+                    onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                    placeholder="Add a new subtask"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md"
+                  />
+                  <button
+                    onClick={handleAddSubtask}
+                    disabled={savingSubtask}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                  >
+                    {savingSubtask ? 'Adding…' : 'Add Subtask'}
+                  </button>
+                </div>
+              </div>
+            ) : legacyPlanItems.length > 0 ? (
+              <div className="space-y-4">
+                {legacyPlanItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className={`p-4 rounded-md border ${
+                      item.status === 'done' ? 'bg-green-50 opacity-60' : 'bg-white'
+                    }`}
                   >
                     <div className="flex justify-between items-center">
                       <div>
@@ -363,44 +544,23 @@ export function TaskDetails() {
                         </div>
                       </div>
                       <button
-                        onClick={() => markItemDone(item)}
+                        onClick={() => markLegacyItemDone(item)}
                         className="text-blue-600 text-sm underline"
                       >
                         {item.status === 'done' ? 'Undo' : 'Mark done'}
                       </button>
                     </div>
-                    {item.checklist && item.checklist.length > 0 && (
-                      <ul className="mt-2 ml-4 list-disc text-sm text-gray-700">
-                        {item.checklist.map((step: string, i: number) => (
-                          <li key={i}>{step}</li>
-                        ))}
-                      </ul>
-                    )}
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-gray-500">No plan items yet.</p>
+              <p className="text-gray-500">No accepted subtasks yet.</p>
             )}
           </>
         ) : (
           <p className="text-red-600">Task not found.</p>
         )}
       </div>
-
-      <AIPlanModal
-        open={modalOpen}
-        taskTitle={task?.title || ''}
-        taskDue={task?.due_at || task?.due_date}
-        previewPlan={modalPlan}
-        onAccept={handleAcceptPlan}
-        onRegenerate={async () => {
-          const plan = await regeneratePlan(taskId);
-          setModalPlan(plan);
-        }}
-        onClose={() => setModalOpen(false)}
-        loading={modalLoading}
-      />
     </div>
   );
 }

@@ -12,8 +12,102 @@ interface PreviewResponse {
 }
 
 interface AcceptResponse {
-  insertedItems: Record<string, string | number | string[] | null>[];  // Row objects from task_plan_items.
+  insertedItems: any[];  // Row objects from task_plan_items.
 }
+
+const isInvalidJwtHttpError = async (error: unknown): Promise<boolean> => {
+  const err = error as { name?: string; context?: unknown };
+  if (err?.name !== 'FunctionsHttpError') {
+    return false;
+  }
+
+  const response = err.context as Response | undefined;
+  if (!response || response.status !== 401) {
+    return false;
+  }
+
+  try {
+    const body = (await response.clone().text()).toLowerCase();
+    return body.includes('invalid jwt');
+  } catch {
+    return false;
+  }
+};
+
+const invokeWithAuthRefresh = async <T>(
+  functionName: string,
+  body: unknown,
+): Promise<T> => {
+  let result = await supabase.functions.invoke<T>(functionName, { body });
+
+  if (result.error && await isInvalidJwtHttpError(result.error)) {
+    const { error: refreshError } = await supabase.auth.refreshSession();
+    if (!refreshError) {
+      result = await supabase.functions.invoke<T>(functionName, { body });
+    }
+  }
+
+  if (result.error && await isInvalidJwtHttpError(result.error)) {
+    await supabase.auth.signOut();
+    throw new Error('Your session token is invalid. Please sign in again.');
+  }
+
+  if (result.error) {
+    throw new Error(await formatFunctionError(result.error));
+  }
+
+  if (!result.data) {
+    throw new Error(`No response data from ${functionName}`);
+  }
+
+  return result.data;
+};
+
+const formatFunctionError = async (error: unknown): Promise<string> => {
+  if (!error) {
+    return 'Unknown Edge Function error';
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  const err = error as {
+    name?: string;
+    message?: string;
+    context?: unknown;
+  };
+
+  if (err.name === 'FunctionsHttpError') {
+    const response = err.context as Response | undefined;
+    if (response) {
+      let responseBody = '';
+      try {
+        responseBody = (await response.clone().text()).trim();
+      } catch {
+        // Ignore response body parsing failures.
+      }
+      const detail = responseBody ? `: ${responseBody}` : '';
+      return `Edge Function failed with HTTP ${response.status}${detail}`;
+    }
+  }
+
+  if (err.name === 'FunctionsFetchError') {
+    return (
+      'Unable to reach the Supabase Edge Function. ' +
+      'Verify the function is deployed and CORS allows: authorization, apikey, x-client-info, content-type.'
+    );
+  }
+
+  if (err.message) {
+    return err.message;
+  }
+
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return 'Unknown Edge Function error';
+  }
+};
 
 /**
  * Request an AI-generated preview plan for a task.
@@ -24,24 +118,11 @@ export const getPlanPreview = async (
   taskId: string,
   random = false,
 ): Promise<PlanItemType[]> => {
-  const headers: Record<string, string> = {};
-  const session = await supabase.auth.getSession();
-  if (session.data.session?.access_token) {
-    headers.Authorization = `Bearer ${session.data.session.access_token}`;
-  }
-  const { data, error } = await supabase.functions.invoke<PreviewResponse>(
+  const data = await invokeWithAuthRefresh<PreviewResponse>(
     'ai-plan-preview',
-    {
-      body: JSON.stringify({ taskId, random }),
-      headers,
-    },
+    { taskId, random },
   );
-  if (error) {
-    throw error;
-  }
-  if (!data) {
-    throw new Error('No preview data');
-  }
+
   return data.previewPlan;
 };
 
@@ -55,25 +136,12 @@ export const acceptPlan = async (
   taskId: string,
   plan: PlanItemType[],
   regenerate = false,
-): Promise<Record<string, string | number | string[] | null>[]> => {
-  const headers: Record<string, string> = {};
-  const session = await supabase.auth.getSession();
-  if (session.data.session?.access_token) {
-    headers.Authorization = `Bearer ${session.data.session.access_token}`;
-  }
-  const { data, error } = await supabase.functions.invoke<AcceptResponse>(
+): Promise<any[]> => {
+  const data = await invokeWithAuthRefresh<AcceptResponse>(
     'ai-plan-accept',
-    {
-      body: JSON.stringify({ taskId, plan, regenerate }),
-      headers,
-    },
+    { taskId, plan, regenerate },
   );
-  if (error) {
-    throw error;
-  }
-  if (!data) {
-    throw new Error('No accept response');
-  }
+
   return data.insertedItems;
 };
 

@@ -5,8 +5,14 @@ import { useAuth } from '@/app/context/AuthContext';
 import { ArrowLeft, CheckCircle, Edit2 } from 'lucide-react';
 import { StatusMessage } from '@/app/components/ui/status-message';
 import { supabase } from '@/lib/supabaseClient';
-import { getPlanPreview, acceptPlan, regeneratePlan, PlanItemType } from '@/lib/aiPlan';
-import { AIPlanModal } from '@/app/components/AIPlanModal';
+import { getPlanPreview, regeneratePlan, PlanItemType } from '@/lib/aiPlan';
+import { DocumentPlanModal } from '@/app/components/DocumentPlanModal';
+import {
+  planItemsToSteps,
+  saveDraftPlan,
+  acceptDraftPlan,
+  skipDraftPlan,
+} from '@/lib/taskPlanning';
 
 export function AIExtraction() {
   const { user } = useAuth();
@@ -26,6 +32,8 @@ export function AIExtraction() {
   const [planPreview, setPlanPreview] = useState<PlanItemType[]>([]);
   const [planLoading, setPlanLoading] = useState(false);
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
+  const [currentDraftPlanId, setCurrentDraftPlanId] = useState<string | null>(null);
+  const [taskCreatedInFlow, setTaskCreatedInFlow] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -84,7 +92,8 @@ export function AIExtraction() {
 
     if (existingErr) throw existingErr;
 
-    let task: { id: string; due_date?: string } | null = existing;
+    let task: any = existing;
+    let created = false;
     if (task) {
       if (extractedDate && extractedDate !== task.due_date) {
         const { error: updateErr } = await supabase
@@ -96,20 +105,43 @@ export function AIExtraction() {
         task = { ...task, due_date: extractedDate };
       }
     } else {
-      const { data: newTask, error: taskErr } = await supabase
+      const payload = {
+        title: extractedTitle || filename,
+        due_date: extractedDate || null,
+        category: 'Academic',
+        priority: 'medium',
+        notes: null,
+        source: 'document',
+        user_id: user!.id,
+      };
+
+      let newTask: any = null;
+      let taskErr: any = null;
+
+      ({ data: newTask, error: taskErr } = await supabase
         .from('tasks')
-        .insert({
-          title: extractedTitle || filename,
-          due_date: extractedDate || null,
-          category: 'Academic',
-          priority: 'medium',
-          notes: null,
-          user_id: user!.id,
-        })
+        .insert(payload)
         .select()
-        .single();
+        .single());
+
+      if (taskErr && String(taskErr.message || '').toLowerCase().includes('source')) {
+        ({ data: newTask, error: taskErr } = await supabase
+          .from('tasks')
+          .insert({
+            title: extractedTitle || filename,
+            due_date: extractedDate || null,
+            category: 'Academic',
+            priority: 'medium',
+            notes: null,
+            user_id: user!.id,
+          })
+          .select()
+          .single());
+      }
+
       if (taskErr || !newTask) throw taskErr || new Error('Failed to create task row.');
       task = newTask;
+      created = true;
     }
 
     const documentId = location.state?.documentId;
@@ -122,14 +154,37 @@ export function AIExtraction() {
       if (docUpdateErr) throw docUpdateErr;
     }
 
-    return task;
+    return { task, created };
+  };
+
+  const cleanupCreatedTask = async (taskId: string) => {
+    const documentId = location.state?.documentId;
+    if (documentId) {
+      await supabase
+        .from('documents')
+        .update({ task_id: null })
+        .eq('id', documentId)
+        .eq('user_id', user!.id);
+    }
+
+    await supabase
+      .from('task_plans')
+      .delete()
+      .eq('task_id', taskId)
+      .eq('user_id', user!.id);
+
+    await supabase
+      .from('tasks')
+      .delete()
+      .eq('id', taskId)
+      .eq('user_id', user!.id);
   };
 
   const handleCreateTaskOnly = async () => {
     setActionLoading(true);
     setError(null);
     try {
-      const task = await createOrFindTask();
+      const { task } = await createOrFindTask();
       navigate('/tasks/' + task.id);
     } catch (e) {
       console.error(e);
@@ -145,9 +200,12 @@ export function AIExtraction() {
     setError(null);
 
     try {
-      const task = await createOrFindTask();
+      const { task, created } = await createOrFindTask();
       setCurrentTaskId(task.id);
+      setTaskCreatedInFlow(created);
       const preview = await getPlanPreview(task.id);
+      const draft = await saveDraftPlan(task.id, user!.id, planItemsToSteps(preview));
+      setCurrentDraftPlanId(draft.id);
       setPlanPreview(preview);
       setPlanModalOpen(true);
     } catch (e) {
@@ -160,12 +218,12 @@ export function AIExtraction() {
   };
 
   const handleEdit = () => {
-    navigate('/tasks/new', {
-      state: {
-        prefillTitle: extractedTitle,
+    navigate('/tasks/new', { 
+      state: { 
+        prefillTitle: extractedTitle, 
         prefillDate: extractedDate,
-        linkedDocument: filename
-      }
+        linkedDocument: filename 
+      } 
     });
   };
 
@@ -183,7 +241,7 @@ export function AIExtraction() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
       <Navigation />
-
+      
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <button
           onClick={() => navigate('/documents')}
@@ -201,7 +259,7 @@ export function AIExtraction() {
               </div>
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">AI Extraction Complete</h2>
-                <p className="text-gray-600">We&apos;ve extracted the following information from your document</p>
+                <p className="text-gray-600">We've extracted the following information from your document</p>
               </div>
             </div>
           </div>
@@ -249,10 +307,12 @@ export function AIExtraction() {
               />
             </div>
 
-            <p className="text-sm text-yellow-800">
-              💡 <strong>Tip:</strong> You can confirm these details to quickly create a task, or click &quot;Edit Full Task&quot;
-              to customize category, priority, and other details.
-            </p>
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <p className="text-sm text-yellow-800">
+                💡 <strong>Tip:</strong> You can confirm these details to quickly create a task, or click "Edit Full Task" 
+                to customize category, priority, and other details.
+              </p>
+            </div>
 
             <div className="flex justify-end gap-3 pt-4">
               <button
@@ -288,27 +348,52 @@ export function AIExtraction() {
         </div>
       </div>
 
-      {/* plan preview modal */}
-      <AIPlanModal
+      <DocumentPlanModal
         open={planModalOpen}
         taskTitle={extractedTitle || filename}
         taskDue={extractedDate}
-        previewPlan={planPreview}
-        onAccept={async (plan) => {
-          if (currentTaskId) {
-            await acceptPlan(currentTaskId, plan);
+        steps={planItemsToSteps(planPreview)}
+        loading={planLoading}
+        onCreateTaskAndPlan={async () => {
+          if (currentTaskId && currentDraftPlanId) {
+            setPlanLoading(true);
+            await acceptDraftPlan(currentTaskId, user!.id, currentDraftPlanId);
             setPlanModalOpen(false);
             navigate('/tasks/' + currentTaskId);
+            setPlanLoading(false);
+          }
+        }}
+        onCreateTaskOnly={async () => {
+          if (currentTaskId) {
+            setPlanLoading(true);
+            if (currentDraftPlanId) {
+              await skipDraftPlan(currentDraftPlanId, user!.id);
+            }
+            setPlanModalOpen(false);
+            navigate('/tasks/' + currentTaskId);
+            setPlanLoading(false);
           }
         }}
         onRegenerate={async () => {
           if (currentTaskId) {
-            const plan = await regeneratePlan(currentTaskId);
-            setPlanPreview(plan);
+            setPlanLoading(true);
+            const preview = await regeneratePlan(currentTaskId);
+            const draft = await saveDraftPlan(currentTaskId, user!.id, planItemsToSteps(preview));
+            setCurrentDraftPlanId(draft.id);
+            setPlanPreview(preview);
+            setPlanLoading(false);
           }
         }}
-        onClose={() => setPlanModalOpen(false)}
-        loading={planLoading}
+        onCancel={async () => {
+          if (currentDraftPlanId) {
+            await skipDraftPlan(currentDraftPlanId, user!.id);
+          }
+          if (currentTaskId && taskCreatedInFlow) {
+            await cleanupCreatedTask(currentTaskId);
+          }
+          setPlanModalOpen(false);
+          navigate('/documents');
+        }}
       />
     </div>
   );

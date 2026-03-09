@@ -214,6 +214,7 @@ export function TaskForm() {
           due_date: dueDate,
           due_at: dueDateIso,
           notes,
+          source: 'manual',
           user_id: user!.id,
         };
 
@@ -224,7 +225,13 @@ export function TaskForm() {
           .select()
           .single();
 
-        if (insertErr && String(insertErr.message || '').toLowerCase().includes('due_at')) {
+        if (
+          insertErr &&
+          (
+            String(insertErr.message || '').toLowerCase().includes('due_at') ||
+            String(insertErr.message || '').toLowerCase().includes('source')
+          )
+        ) {
           const fallbackPayload = {
             title,
             category,

@@ -1,15 +1,17 @@
-/* eslint-disable */
+// @ts-nocheck
 // deno-lint-ignore-file no-explicit-any
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 
-// No change to OPENAI usage here, but we can log if missing later if needed.
-const supabase = createClient(supabaseUrl, supabaseKey);
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST,OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
-const isValidPlanItem = (obj: Record<string, unknown>) => {
+const isValidPlanItem = (obj: any) => {
   return (
     obj &&
     typeof obj.plannedFor === 'string' &&
@@ -21,84 +23,91 @@ const isValidPlanItem = (obj: Record<string, unknown>) => {
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST,OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type,Authorization',
-      },
-    });
+    return new Response(null, { headers: corsHeaders });
   }
   if (req.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405 });
+    return new Response('Method not allowed', { status: 405, headers: corsHeaders });
   }
 
   const authHeader = req.headers.get('Authorization') || '';
-  const token = authHeader.split(' ')[1] || '';
-  const { data: userData, error: userErr } = await supabase.auth.getUser(
-    token,
-  );
+  const projectUrl = new URL(req.url).origin;
+  const supabase = createClient(projectUrl, SUPABASE_ANON_KEY, {
+    global: {
+      headers: {
+        Authorization: authHeader,
+      },
+    },
+  });
+
+  const { data: userData, error: userErr } = await supabase.auth.getUser();
   if (userErr || !userData?.user) {
-    return new Response('Unauthorized', { status: 401 });
+    const reason = userErr?.message || 'No authenticated user in request';
+    return new Response(`Unauthorized: ${reason}`, {
+      status: 401,
+      headers: corsHeaders,
+    });
   }
   const user = userData.user;
 
   const body = await req.json();
   const { taskId, plan, regenerate } = body;
   if (!taskId || !Array.isArray(plan)) {
-    return new Response('Invalid payload', { status: 400 });
+    return new Response('Invalid payload', { status: 400, headers: corsHeaders });
   }
 
   // Validate.
   if (!plan.every(isValidPlanItem)) {
-    return new Response('Invalid plan format', { status: 400 });
+    return new Response('Invalid plan format', { status: 400, headers: corsHeaders });
   }
 
   // Verify ownership.
   const { data: task, error: taskErr } = await supabase
     .from('tasks')
-    .select('id,userId')
+    .select('id,user_id')
     .eq('id', taskId)
     .single();
-  if (taskErr || !task || task.userId !== user.id) {
-    return new Response('Not found', { status: 404 });
+  if (taskErr || !task || task.user_id !== user.id) {
+    return new Response('Not found', { status: 404, headers: corsHeaders });
   }
 
   if (regenerate) {
     await supabase
-      .from('taskPlanItems')
+      .from('task_plan_items')
       .delete()
-      .eq('taskId', taskId)
-      .eq('userId', user.id);
+      .eq('task_id', taskId)
+      .eq('user_id', user.id);
   }
 
-  const inserts = (plan as Record<string, unknown>[]).map((item, idx: number) => ({
-    taskId,
-    userId: user.id,
+  const inserts = plan.map((item: any, idx: number) => ({
+    task_id: taskId,
+    user_id: user.id,
     title: item.title,
-    plannedFor: item.plannedFor,
-    durationMinutes: item.durationMinutes,
-    orderIndex: idx,
+    planned_for: item.plannedFor,
+    duration_minutes: item.durationMinutes,
+    order_index: idx,
     status: 'todo',
-    createdBy: 'ai',
+    created_by: 'ai',
     checklist: item.checklist,
   }));
 
   const { data: insertedItems, error: insErr } = await supabase
-    .from('taskPlanItems')
+    .from('task_plan_items')
     .insert(inserts)
     .select();
 
   if (insErr) {
-    return new Response('Failed to insert plan items', { status: 500 });
+    return new Response('Failed to insert plan items', {
+      status: 500,
+      headers: corsHeaders,
+    });
   }
 
   // Create reminders one hour before each session.
-  const reminders = (insertedItems || []).map((pi: Record<string, any>) => ({
-    taskId,
-    planItemId: pi.id,
-    remindAt: new Date(
-      new Date(pi.plannedFor).getTime() - 60 * 60 * 1000,
+  const reminders = (insertedItems || []).map((pi: any) => ({
+    task_id: taskId,
+    plan_item_id: pi.id,
+    remind_at: new Date(
+      new Date(pi.planned_for).getTime() - 60 * 60 * 1000,
     ).toISOString(),
   }));
   if (reminders.length) {
@@ -107,8 +116,8 @@ serve(async (req) => {
 
   return new Response(JSON.stringify({ insertedItems }), {
     headers: {
+      ...corsHeaders,
       'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
     },
   });
 });

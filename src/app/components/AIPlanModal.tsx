@@ -48,7 +48,9 @@ export function AIPlanModal({
 
   const formatDateTime = (iso: string) => {
     try {
-      return format(new Date(iso), 'PP p');
+      const date = new Date(iso);
+      if (Number.isNaN(date.getTime())) return iso;
+      return format(date, 'PP p');
     } catch {
       return iso;
     }
