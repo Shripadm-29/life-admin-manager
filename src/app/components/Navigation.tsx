@@ -23,6 +23,7 @@ import { NotificationItem } from '@/app/types';
 export function Navigation() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [imageError, setImageError] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -252,8 +253,13 @@ export function Navigation() {
                   setNotificationsOpen(false);
                 }}
               >
-                {user?.avatarUrl ? (
-                  <img src={user.avatarUrl} alt="Profile" className="w-full h-full object-cover" />
+                {user?.avatarUrl && !imageError ? (
+                  <img 
+                    src={user.avatarUrl} 
+                    alt="Profile" 
+                    className="w-full h-full object-cover" 
+                    onError={() => setImageError(true)}
+                  />
                 ) : (
                   <User className="w-6 h-6 text-white" />
                 )}

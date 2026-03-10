@@ -16,9 +16,13 @@ export function Dashboard() {
 
   useEffect(() => {
     if (!user) {
+      if (window.location.hash.includes('access_token') || window.location.search.includes('code')) {
+        return; 
+      }
       navigate('/login');
       return;
     }
+    
     setLoading(true);
     setError(null);
     (async () => {
