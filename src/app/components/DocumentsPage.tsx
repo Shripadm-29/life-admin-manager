@@ -8,7 +8,7 @@ import { Document } from '@/app/types';
 import { Upload, FileText, Link as LinkIcon, Calendar, Search, Trash2 } from 'lucide-react';
 
 export function DocumentsPage() {
-  const { user } = useAuth();
+  const { user, authLoading } = useAuth();
   const navigate = useNavigate();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [taskMap, setTaskMap] = useState<Record<string, string>>({}); // id -> title
@@ -21,6 +21,10 @@ export function DocumentsPage() {
   const [recentlyViewedMap, setRecentlyViewedMap] = useState<Record<string, number>>({});
 
   useEffect(() => {
+    if (authLoading) {
+      return;
+    }
+
     if (!user) {
       navigate('/login');
       return;
@@ -66,7 +70,7 @@ export function DocumentsPage() {
       }
       setLoading(false);
     })();
-  }, [user, navigate]);
+  }, [user, authLoading, navigate]);
 
   useEffect(() => {
     if (!user) return;
@@ -84,7 +88,7 @@ export function DocumentsPage() {
     }
   }, [user]);
 
-  if (!user) return null;
+  if (authLoading || !user) return null;
 
   const filteredDocuments = documents.filter(doc => {
     const displayName = getDisplayFileName(doc.filePath).toLowerCase();

@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { User, Mail, LogOut, Camera, Lock } from 'lucide-react';
 
 export function ProfilePage() {
-  const { user, logout, refreshUser } = useAuth();
+  const { user, authLoading, logout, refreshUser } = useAuth();
   const navigate = useNavigate();
   const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl || '');
   const [avatarStatus, setAvatarStatus] = useState('');
@@ -18,16 +18,20 @@ export function ProfilePage() {
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
   useEffect(() => {
+    if (authLoading) {
+      return;
+    }
+
     if (!user) {
       navigate('/login');
     }
-  }, [user, navigate]);
+  }, [user, authLoading, navigate]);
 
   useEffect(() => {
     setAvatarUrl(user?.avatarUrl || '');
   }, [user?.avatarUrl]);
 
-  if (!user) return null;
+  if (authLoading || !user) return null;
 
   const handleLogout = () => {
     logout();

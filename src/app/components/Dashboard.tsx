@@ -8,13 +8,17 @@ import { Task } from '@/app/types';
 import { Plus, AlertCircle, Clock, Calendar } from 'lucide-react';
 
 export function Dashboard() {
-  const { user } = useAuth();
+  const { user, authLoading } = useAuth();
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (authLoading) {
+      return;
+    }
+
     if (!user) {
       if (window.location.hash.includes('access_token') || window.location.search.includes('code')) {
         return; 
@@ -47,9 +51,9 @@ export function Dashboard() {
       }
       setLoading(false);
     })();
-  }, [user, navigate]);
+  }, [user, authLoading, navigate]);
 
-  if (!user) return null;
+  if (authLoading || !user) return null;
 
   const upcomingTasks = tasks
     .filter(t => !t.completed && new Date(t.dueDate) >= new Date())

@@ -16,6 +16,7 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
+  authLoading: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   signup: (
     email: string,
@@ -30,6 +31,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
   const mapSupabaseUser = (supabaseUser: SupabaseUser): User => ({
     id: supabaseUser.id,
@@ -44,17 +46,42 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const { data } = await supabase.auth.getUser();
     if (data.user) {
       setUser(mapSupabaseUser(data.user));
+    } else {
+      setUser(null);
     }
   };
 
   // Sync with supabase session on mount.
   useEffect(() => {
+    let isMounted = true;
+
     (async () => {
       const { data } = await supabase.auth.getSession();
+      if (!isMounted) return;
+
       if (data.session?.user) {
         setUser(mapSupabaseUser(data.session.user));
+      } else {
+        setUser(null);
       }
+      setAuthLoading(false);
     })();
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!isMounted) return;
+
+      if (session?.user) {
+        setUser(mapSupabaseUser(session.user));
+      } else {
+        setUser(null);
+      }
+      setAuthLoading(false);
+    });
+
+    return () => {
+      isMounted = false;
+      listener.subscription.unsubscribe();
+    };
   }, []);
 
   const login = async (email: string, password: string) => {
@@ -89,7 +116,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, signup, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, authLoading, login, signup, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

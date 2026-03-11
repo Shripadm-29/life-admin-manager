@@ -10,6 +10,26 @@ export interface SendReminderEmailInput {
   remindAt: string;
 }
 
+const formatReminderTime = (remindAt: string) => {
+  const parsed = new Date(remindAt);
+  if (Number.isNaN(parsed.getTime())) {
+    return remindAt;
+  }
+
+  const date = parsed.toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+
+  const time = parsed.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
+  return `${date} at ${time}`;
+};
+
 export const sendReminderEmail = async ({
   to,
   title,
@@ -23,14 +43,22 @@ export const sendReminderEmail = async ({
   const resend = new Resend(resendApiKey);
 
   const subject = `Reminder: ${title}`;
+  const formattedTime = formatReminderTime(remindAt);
   const text = [
-    'You have a reminder scheduled.',
+    'Hi,',
     '',
-    `Title: ${title}`,
+    'This is a reminder for an upcoming task.',
+    '',
+    `Task: ${title}`,
     `Description: ${description || 'N/A'}`,
-    `Time: ${remindAt}`,
+    `Scheduled Time: ${formattedTime}`,
     '',
-    'Sent from Life Admin Manager',
+    "Make sure to complete it on time. You're making progress toward finishing your main task.",
+    '',
+    'Good luck!',
+    '',
+    '- Life Admin Manager',
+    '',
   ].join('\n');
 
   const from = Deno.env.get('REMINDER_EMAIL_FROM') || 'Life Admin Manager <onboarding@resend.dev>';

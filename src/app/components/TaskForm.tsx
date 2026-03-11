@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { ArrowLeft } from 'lucide-react';
 
 export function TaskForm() {
-  const { user } = useAuth();
+  const { user, authLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { id } = useParams();
@@ -59,6 +59,10 @@ export function TaskForm() {
   };
 
   useEffect(() => {
+    if (authLoading) {
+      return;
+    }
+
     if (!user) {
       navigate('/login');
       return;
@@ -98,9 +102,9 @@ export function TaskForm() {
       }
       // we could store linkedDocument in notes or somewhere but skipping for now
     }
-  }, [user, navigate, isEdit, id, location.state]);
+  }, [user, authLoading, navigate, isEdit, id, location.state]);
 
-  if (!user) return null;
+  if (authLoading || !user) return null;
 
   const categories = [
     'Academic',

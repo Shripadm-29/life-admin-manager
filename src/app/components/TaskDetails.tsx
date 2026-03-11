@@ -36,7 +36,7 @@ const createEmptySubtask = (): PlannerSubtask => ({
 });
 
 export function TaskDetails() {
-  const { user } = useAuth();
+  const { user, authLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { id } = useParams();
@@ -58,12 +58,16 @@ export function TaskDetails() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (authLoading) {
+      return;
+    }
+
     if (!user) {
       navigate('/login');
       return;
     }
     void loadTaskPage();
-  }, [user, taskId]);
+  }, [user, authLoading, taskId]);
 
   const loadTaskPage = async () => {
     if (!user) return;
