@@ -15,6 +15,46 @@ const jsonHeaders = {
   'Access-Control-Allow-Origin': '*',
 };
 
+const MIN_EMAIL_SEND_INTERVAL_MS = 600;
+let nextEmailSendAt = 0;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const waitForEmailSendSlot = async () => {
+  const now = Date.now();
+  const waitMs = Math.max(0, nextEmailSendAt - now);
+  if (waitMs > 0) {
+    await sleep(waitMs);
+  }
+  nextEmailSendAt = Date.now() + MIN_EMAIL_SEND_INTERVAL_MS;
+};
+
+const extractBearerToken = (authorizationHeader: string | null) => {
+  if (!authorizationHeader) return null;
+
+  const [scheme, token] = authorizationHeader.trim().split(/\s+/, 2);
+  if (!scheme || !token) return null;
+  if (scheme.toLowerCase() !== 'bearer') return null;
+
+  return token;
+};
+
+const isAuthorizedSchedulerRequest = (req: Request) => {
+  const cronSecretHeader = req.headers.get('x-cron-secret');
+  const bearerToken = extractBearerToken(req.headers.get('authorization'));
+
+  const hasValidCronSecret = Boolean(
+    reminderCronSecret && cronSecretHeader === reminderCronSecret,
+  );
+
+  // Supabase Scheduler can invoke Edge Functions with an Authorization header.
+  const hasValidServiceBearer = Boolean(
+    bearerToken && bearerToken === supabaseServiceRoleKey,
+  );
+
+  return hasValidCronSecret || hasValidServiceBearer;
+};
+
 const addDays = (date: Date, days: number) => {
   const next = new Date(date);
   next.setUTCDate(next.getUTCDate() + days);
@@ -123,6 +163,7 @@ const processLegacyReminders = async (now: Date) => {
         throw new Error('User email not found.');
       }
 
+      await waitForEmailSendSlot();
       await sendReminderEmail({
         to: userData.user.email,
         title: reminder.title,
@@ -174,6 +215,12 @@ const processLegacyReminders = async (now: Date) => {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
 
+      console.error('Legacy reminder send failed', {
+        reminderId: reminder.id,
+        userId: reminder.user_id,
+        message,
+      });
+
       await supabase
         .from('reminders')
         .update({
@@ -220,6 +267,7 @@ const processSubtaskReminders = async () => {
         throw new Error('User email not found.');
       }
 
+      await waitForEmailSendSlot();
       await sendReminderEmail({
         to: userData.user.email,
         title: reminder.subtasks?.title || 'Scheduled subtask reminder',
@@ -245,10 +293,18 @@ const processSubtaskReminders = async () => {
 
       results.push({ id: reminder.id, emailSent: true });
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+
+      console.error('Subtask reminder send failed', {
+        reminderId: reminder.id,
+        userId: reminder.user_id || reminder.subtasks?.user_id || null,
+        message,
+      });
+
       results.push({
         id: reminder.id,
         emailSent,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: message,
       });
     }
   }
@@ -262,7 +318,7 @@ serve(async (req) => {
       headers: {
         ...jsonHeaders,
         'Access-Control-Allow-Methods': 'POST,OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type,x-cron-secret',
+        'Access-Control-Allow-Headers': 'Content-Type,x-cron-secret,authorization',
       },
     });
   }
@@ -274,9 +330,11 @@ serve(async (req) => {
     });
   }
 
-  const secret = req.headers.get('x-cron-secret');
-  if (!reminderCronSecret || secret !== reminderCronSecret) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+  if (!isAuthorizedSchedulerRequest(req)) {
+    return new Response(JSON.stringify({
+      error: 'Unauthorized',
+      detail: 'Provide x-cron-secret or Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY>.',
+    }), {
       status: 401,
       headers: jsonHeaders,
     });
@@ -285,10 +343,8 @@ serve(async (req) => {
   const now = new Date();
 
   try {
-    const [legacyResults, subtaskResults] = await Promise.all([
-      processLegacyReminders(now),
-      processSubtaskReminders(),
-    ]);
+    const legacyResults = await processLegacyReminders(now);
+    const subtaskResults = await processSubtaskReminders();
 
     const results = [...legacyResults, ...subtaskResults];
 

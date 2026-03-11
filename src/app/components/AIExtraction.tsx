@@ -13,7 +13,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { acceptDraftPlan, saveDraftPlan, skipDraftPlan } from '@/lib/taskPlanning';
 
 export function AIExtraction() {
-  const { user } = useAuth();
+  const { user, authLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const filename = location.state?.filename || 'document.pdf';
@@ -47,6 +47,10 @@ export function AIExtraction() {
   };
 
   useEffect(() => {
+    if (authLoading) {
+      return;
+    }
+
     if (!user) {
       navigate('/login');
       return;
@@ -80,9 +84,9 @@ export function AIExtraction() {
         setLoading(false);
       }
     })();
-  }, [user, navigate, filename, documentId]);
+  }, [user, authLoading, navigate, filename, documentId]);
 
-  if (!user) return null;
+  if (authLoading || !user) return null;
 
   if (loading) {
     return (

@@ -8,7 +8,7 @@ import { Task } from '@/app/types';
 import { Plus, Search, Filter, Trash2, Calendar } from 'lucide-react';
 
 export function TasksPage() {
-  const { user } = useAuth();
+  const { user, authLoading } = useAuth();
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<Array<Task & { linkedDocumentNames: string[]; latestDocumentUploadedAt?: string | null }>>([]);
   const [loading, setLoading] = useState(true);
@@ -21,6 +21,10 @@ export function TasksPage() {
   const [sortBy, setSortBy] = useState<'due-asc' | 'due-desc' | 'created-desc' | 'created-asc' | 'title-asc'>('due-asc');
 
   useEffect(() => {
+    if (authLoading) {
+      return;
+    }
+
     if (!user) {
       navigate('/login');
       return;
@@ -94,9 +98,9 @@ export function TasksPage() {
       setLoading(false);
     })();
     return;
-  }, [user, navigate]);
+  }, [user, authLoading, navigate]);
 
-  if (!user) return null;
+  if (authLoading || !user) return null;
 
   const categories = ['all', ...Array.from(new Set(tasks.map(t => t.category)))];
   const priorities = ['all', 'high', 'medium', 'low'];

@@ -16,7 +16,7 @@ import { ReminderModal } from '@/app/components/ReminderModal';
 import { Bell, Calendar, CalendarClock, Clock, Plus, Repeat, Search, Trash2 } from 'lucide-react';
 
 export function RemindersPage() {
-  const { user } = useAuth();
+  const { user, authLoading } = useAuth();
   const navigate = useNavigate();
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -42,6 +42,10 @@ export function RemindersPage() {
   };
 
   useEffect(() => {
+    if (authLoading) {
+      return;
+    }
+
     if (!user) {
       navigate('/login');
       return;
@@ -57,7 +61,7 @@ export function RemindersPage() {
         setLoading(false);
       }
     })();
-  }, [user, navigate]);
+  }, [user, authLoading, navigate]);
 
   const openCreateModal = () => {
     setEditingReminder(null);
@@ -230,7 +234,7 @@ export function RemindersPage() {
     );
   }, [visibleReminders, sortBy]);
 
-  if (!user) return null;
+  if (authLoading || !user) return null;
 
   const formatDateTime = (value: string) => {
     const date = new Date(value);
