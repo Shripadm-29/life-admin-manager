@@ -1,19 +1,43 @@
 import { supabase } from './supabaseClient';
+import {
+  PlannerSubtask,
+  TaskPlanResponse,
+  TaskPlanningContext,
+} from './plannerTypes';
 
-export type PlanItemType = {
-  plannedFor: string;  // ISO string.
-  durationMinutes: number;
-  title: string;
-  checklist: string[];
+export type PlanItemType = PlannerSubtask & {
+  plannedFor?: string;
+  durationMinutes?: number;
+  checklist?: string[];
 };
 
 interface PreviewResponse {
-  previewPlan: PlanItemType[];
+  plan: TaskPlanResponse['plan'];
 }
 
-interface AcceptResponse {
-  insertedItems: any[];  // Row objects from task_plan_items.
-}
+const MAX_DOCUMENTS = 4;
+const MAX_DOCUMENT_TEXT = 3000;
+const MAX_BUSY_EVENTS = 50;
+const MAX_FREE_BLOCKS = 50;
+
+const toBoundedPlanningContext = (
+  context: TaskPlanningContext,
+): TaskPlanningContext => {
+  return {
+    ...context,
+    documents: (context.documents || [])
+      .slice(0, MAX_DOCUMENTS)
+      .map((document) => ({
+        ...document,
+        extracted_text: (document.extracted_text || '').slice(0, MAX_DOCUMENT_TEXT),
+      })),
+    calendar: {
+      ...context.calendar,
+      busy_events: (context.calendar?.busy_events || []).slice(0, MAX_BUSY_EVENTS),
+      free_blocks: (context.calendar?.free_blocks || []).slice(0, MAX_FREE_BLOCKS),
+    },
+  };
+};
 
 const isInvalidJwtHttpError = async (error: unknown): Promise<boolean> => {
   const err = error as { name?: string; context?: unknown };
@@ -34,22 +58,43 @@ const isInvalidJwtHttpError = async (error: unknown): Promise<boolean> => {
   }
 };
 
+const isAnyHttp401Error = (error: unknown): boolean => {
+  const err = error as { context?: unknown };
+  const response = err?.context as Response | undefined;
+  return Boolean(response && response.status === 401);
+};
+
+const invokeFunctionWithSession = async <T>(
+  functionName: string,
+  body: Record<string, unknown>,
+): Promise<{ data: T | null; error: unknown }> => {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+
+  return supabase.functions.invoke<T>(functionName, {
+    body,
+    headers: accessToken
+      ? { Authorization: `Bearer ${accessToken}` }
+      : undefined,
+  });
+};
+
 const invokeWithAuthRefresh = async <T>(
   functionName: string,
-  body: unknown,
+  body: Record<string, unknown>,
 ): Promise<T> => {
-  let result = await supabase.functions.invoke<T>(functionName, { body });
+  let result = await invokeFunctionWithSession<T>(functionName, body);
 
-  if (result.error && await isInvalidJwtHttpError(result.error)) {
+  if (result.error && (isAnyHttp401Error(result.error) || await isInvalidJwtHttpError(result.error))) {
     const { error: refreshError } = await supabase.auth.refreshSession();
     if (!refreshError) {
-      result = await supabase.functions.invoke<T>(functionName, { body });
+      result = await invokeFunctionWithSession<T>(functionName, body);
     }
   }
 
-  if (result.error && await isInvalidJwtHttpError(result.error)) {
+  if (result.error && (isAnyHttp401Error(result.error) || await isInvalidJwtHttpError(result.error))) {
     await supabase.auth.signOut();
-    throw new Error('Your session token is invalid. Please sign in again.');
+    throw new Error('Your session is not authorized for Edge Functions. Please sign in again and retry.');
   }
 
   if (result.error) {
@@ -76,6 +121,25 @@ const formatFunctionError = async (error: unknown): Promise<string> => {
     message?: string;
     context?: unknown;
   };
+
+  const responseFromContext = (() => {
+    const maybeResponse = err.context as Response | undefined;
+    if (maybeResponse && typeof maybeResponse.status === 'number') {
+      return maybeResponse;
+    }
+    return undefined;
+  })();
+
+  if (responseFromContext) {
+    let responseBody = '';
+    try {
+      responseBody = (await responseFromContext.clone().text()).trim();
+    } catch {
+      responseBody = '';
+    }
+    const detail = responseBody ? `: ${responseBody}` : '';
+    return `Edge Function failed with HTTP ${responseFromContext.status}${detail}`;
+  }
 
   if (err.name === 'FunctionsHttpError') {
     const response = err.context as Response | undefined;
@@ -109,48 +173,22 @@ const formatFunctionError = async (error: unknown): Promise<string> => {
   }
 };
 
-/**
- * Request an AI-generated preview plan for a task.
- * @param taskId The ID of the task to plan for.
- * @param random If true, ask the LLM to vary the wording (used for regenerating).
- */
-export const getPlanPreview = async (
-  taskId: string,
+export const generatePlan = async (
+  context: TaskPlanningContext,
   random = false,
-): Promise<PlanItemType[]> => {
+): Promise<TaskPlanResponse> => {
+  const boundedContext = toBoundedPlanningContext(context);
+
   const data = await invokeWithAuthRefresh<PreviewResponse>(
     'ai-plan-preview',
-    { taskId, random },
+    { planningContext: boundedContext, random },
   );
 
-  return data.previewPlan;
+  return { plan: data.plan };
 };
 
-/**
- * Persist an AI-generated plan to the database.
- * @param taskId The ID of the task.
- * @param plan The plan items array (typically one returned from getPlanPreview).
- * @param regenerate Whether existing items for the task should be wiped first.
- */
-export const acceptPlan = async (
-  taskId: string,
-  plan: PlanItemType[],
-  regenerate = false,
-): Promise<any[]> => {
-  const data = await invokeWithAuthRefresh<AcceptResponse>(
-    'ai-plan-accept',
-    { taskId, plan, regenerate },
-  );
-
-  return data.insertedItems;
-};
-
-/**
- * Convenience wrapper for regenerating the plan
- * (simply calls preview with random=true).
- */
 export const regeneratePlan = async (
-  taskId: string,
-): Promise<PlanItemType[]> => {
-  return getPlanPreview(taskId, true);
+  context: TaskPlanningContext,
+): Promise<TaskPlanResponse> => {
+  return generatePlan(context, true);
 };

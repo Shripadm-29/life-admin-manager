@@ -10,7 +10,7 @@ import { Plus, Search, Filter, Trash2, Calendar } from 'lucide-react';
 export function TasksPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<Array<Task & { linkedDocumentNames: string[]; latestDocumentUploadedAt?: string | null }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -18,6 +18,7 @@ export function TasksPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
+  const [sortBy, setSortBy] = useState<'due-asc' | 'due-desc' | 'created-desc' | 'created-asc' | 'title-asc'>('due-asc');
 
   useEffect(() => {
     if (!user) {
@@ -42,6 +43,7 @@ export function TasksPage() {
           due_date?: string;
           notes?: string;
           status?: string;
+          created_at?: string;
         }) => ({
           id: d.id,
           title: d.title,
@@ -50,8 +52,45 @@ export function TasksPage() {
           dueDate: d.due_at || d.due_date || '',
           notes: d.notes || '',
           completed: d.status === 'completed',
+          createdAt: d.created_at,
+          linkedDocumentNames: [],
+          latestDocumentUploadedAt: null,
         }));
-        setTasks(normalized);
+
+        const taskIds = normalized.map((item) => item.id);
+        if (taskIds.length) {
+          const { data: docs, error: docsError } = await supabase
+            .from('documents')
+            .select('task_id,file_path,created_at')
+            .eq('user_id', user!.id)
+            .in('task_id', taskIds)
+            .order('created_at', { ascending: false });
+
+          if (!docsError) {
+            const docMap = new Map<string, { names: string[]; latest: string | null }>();
+            for (const row of docs || []) {
+              const taskId = row.task_id;
+              if (!taskId) continue;
+              const current = docMap.get(taskId) || { names: [], latest: null };
+              const fileName = (row.file_path || '').split('/').pop() || row.file_path || '';
+              if (fileName) current.names.push(fileName);
+              if (!current.latest || (row.created_at && new Date(row.created_at).getTime() > new Date(current.latest).getTime())) {
+                current.latest = row.created_at || current.latest;
+              }
+              docMap.set(taskId, current);
+            }
+
+            setTasks(normalized.map((task) => ({
+              ...task,
+              linkedDocumentNames: docMap.get(task.id)?.names || [],
+              latestDocumentUploadedAt: docMap.get(task.id)?.latest || null,
+            })));
+          } else {
+            setTasks(normalized);
+          }
+        } else {
+          setTasks(normalized);
+        }
       }
       setLoading(false);
     })();
@@ -64,13 +103,36 @@ export function TasksPage() {
   const priorities = ['all', 'high', 'medium', 'low'];
 
   const filteredTasks = tasks.filter(task => {
-    const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      task.notes.toLowerCase().includes(searchTerm.toLowerCase());
+    const searchValue = searchTerm.trim().toLowerCase();
+    const dateLabel = task.dueDate ? new Date(task.dueDate).toLocaleDateString() : '';
+    const createdLabel = task.createdAt ? new Date(task.createdAt).toLocaleDateString() : '';
+    const uploadedLabel = task.latestDocumentUploadedAt ? new Date(task.latestDocumentUploadedAt).toLocaleDateString() : '';
+    const linkedDocs = task.linkedDocumentNames.join(' ').toLowerCase();
+    const matchesSearch = !searchValue || [
+      task.title,
+      task.notes,
+      task.category,
+      dateLabel,
+      createdLabel,
+      uploadedLabel,
+      linkedDocs,
+    ].join(' ').toLowerCase().includes(searchValue);
     const matchesCategory = categoryFilter === 'all' || task.category === categoryFilter;
     const matchesPriority = priorityFilter === 'all' || task.priority === priorityFilter;
 
     return matchesSearch && matchesCategory && matchesPriority;
-  }).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+  }).sort((a, b) => {
+    const dueA = new Date(a.dueDate || 0).getTime();
+    const dueB = new Date(b.dueDate || 0).getTime();
+    const createdA = new Date(a.createdAt || 0).getTime();
+    const createdB = new Date(b.createdAt || 0).getTime();
+
+    if (sortBy === 'due-desc') return dueB - dueA;
+    if (sortBy === 'created-desc') return createdB - createdA;
+    if (sortBy === 'created-asc') return createdA - createdB;
+    if (sortBy === 'title-asc') return a.title.localeCompare(b.title);
+    return dueA - dueB;
+  });
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -178,12 +240,12 @@ export function TasksPage() {
           </div>
 
           <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="relative">
                 <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-indigo-400" />
                 <input
                   type="text"
-                  placeholder="Search tasks..."
+                  placeholder="Search title, notes, linked docs, uploaded date..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
@@ -217,6 +279,21 @@ export function TasksPage() {
                       {pri === 'all' ? 'All Priorities' : pri.charAt(0).toUpperCase() + pri.slice(1)}
                     </option>
                   ))}
+                </select>
+              </div>
+
+              <div className="relative">
+                <Filter className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                  className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent transition-all appearance-none bg-white cursor-pointer"
+                >
+                  <option value="due-asc">Due date (earliest)</option>
+                  <option value="due-desc">Due date (latest)</option>
+                  <option value="created-desc">Created (newest)</option>
+                  <option value="created-asc">Created (oldest)</option>
+                  <option value="title-asc">Title (A-Z)</option>
                 </select>
               </div>
             </div>
@@ -279,7 +356,19 @@ export function TasksPage() {
                         <span className="bg-gradient-to-r from-indigo-50 to-purple-50 text-indigo-700 px-3 py-1 rounded-lg font-medium border border-indigo-100">{task.category}</span>
                         <span>•</span>
                         <span className="flex items-center gap-1"><Calendar className="w-4 h-4" />Due: {formatDate(task.dueDate)}</span>
+                        {task.latestDocumentUploadedAt ? (
+                          <>
+                            <span>•</span>
+                            <span>Latest upload: {formatDate(task.latestDocumentUploadedAt)}</span>
+                          </>
+                        ) : null}
                       </div>
+
+                      {task.linkedDocumentNames.length ? (
+                        <p className="mt-2 text-xs text-gray-500">
+                          Linked docs: {task.linkedDocumentNames.slice(0, 3).join(', ')}{task.linkedDocumentNames.length > 3 ? ' ...' : ''}
+                        </p>
+                      ) : null}
                     </div>
 
                     <div className="flex flex-col sm:flex-row gap-2 sm:items-center">

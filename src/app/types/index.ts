@@ -3,11 +3,12 @@ export interface Task {
   title: string;
   category: string;
   priority: 'low' | 'medium' | 'high';
-  // Frontend code typically works with dueDate when displaying.
   dueDate: string;
+  description?: string | null;
   notes: string;
   completed: boolean;
   status?: string;
+  source?: 'manual' | 'document' | string;
   createdAt?: string;
 }
 
@@ -18,6 +19,8 @@ export interface Document {
   extractedTitle?: string;
   extractedDueDate?: string;
   extractionConfidence?: number;
+  extractedText?: string;
+  extractedMetadata?: Record<string, unknown>;
   createdAt?: string;
 }
 
@@ -25,17 +28,21 @@ export interface Reminder {
   id: string;
   userId: string;
   taskId: string | null;
+  subtaskId?: string | null;
   title: string;
   description: string | null;
   remindAt: string;
   repeatType: ReminderRepeatType;
   repeatIntervalDays: number | null;
   isEnabled: boolean;
+  source: 'manual' | 'subtask';
+  status?: string | null;
   lastTriggeredAt: string | null;
   emailSent: boolean;
   createdAt: string;
   updatedAt: string;
   taskTitle?: string | null;
+  subtaskTitle?: string | null;
 }
 
 export type ReminderRepeatType =
