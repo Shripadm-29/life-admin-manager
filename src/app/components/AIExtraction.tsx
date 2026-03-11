@@ -252,17 +252,6 @@ export function AIExtraction() {
     });
   };
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
-        <Navigation />
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <StatusMessage variant="error" message={error} />
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
       <Navigation />
@@ -275,6 +264,12 @@ export function AIExtraction() {
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Documents
         </button>
+
+        {error ? (
+          <div className="mb-4">
+            <StatusMessage variant="error" message={error} />
+          </div>
+        ) : null}
 
         <div className="bg-white rounded-lg shadow">
           <div className="p-6 border-b border-gray-200">
@@ -382,45 +377,80 @@ export function AIExtraction() {
         plan={planPreview}
         loading={planLoading}
         onCreateTaskAndPlan={async () => {
-          if (currentTaskId && currentDraftPlanId) {
-            setPlanLoading(true);
+          if (!currentTaskId || !currentDraftPlanId) {
+            setError('Unable to accept plan because the draft is missing. Please regenerate the preview.');
+            return;
+          }
+
+          setPlanLoading(true);
+          setError(null);
+          try {
             await acceptDraftPlan(currentTaskId, user!.id, currentDraftPlanId);
             setPlanModalOpen(false);
             navigate('/tasks/' + currentTaskId);
+          } catch (failure: any) {
+            setError(`Failed to accept and create plan: ${failure?.message || 'unknown error'}`);
+          } finally {
             setPlanLoading(false);
           }
         }}
         onCreateTaskOnly={async () => {
-          if (currentTaskId) {
-            setPlanLoading(true);
+          if (!currentTaskId) {
+            setError('Unable to create task because no task was generated yet.');
+            return;
+          }
+
+          setPlanLoading(true);
+          setError(null);
+          try {
             if (currentDraftPlanId) {
               await skipDraftPlan(currentDraftPlanId, user!.id);
             }
             setPlanModalOpen(false);
             navigate('/tasks/' + currentTaskId);
+          } catch (failure: any) {
+            setError(`Failed to create task only: ${failure?.message || 'unknown error'}`);
+          } finally {
             setPlanLoading(false);
           }
         }}
         onRegenerate={async () => {
-          if (currentTaskId) {
-            setPlanLoading(true);
+          if (!currentTaskId) {
+            setError('Unable to regenerate because task context is missing.');
+            return;
+          }
+
+          setPlanLoading(true);
+          setError(null);
+          try {
             const context = await buildTaskPlanningContext(currentTaskId, user!.id);
             const preview = await regeneratePlan(context);
             const draft = await saveDraftPlan(currentTaskId, user!.id, preview);
             setCurrentDraftPlanId(draft.id);
             setPlanPreview(preview.plan);
+          } catch (failure: any) {
+            setError(`Failed to regenerate preview plan: ${failure?.message || 'unknown error'}`);
+          } finally {
             setPlanLoading(false);
           }
         }}
         onCancel={async () => {
-          if (currentDraftPlanId) {
-            await skipDraftPlan(currentDraftPlanId, user!.id);
+          setPlanLoading(true);
+          setError(null);
+          try {
+            if (currentDraftPlanId) {
+              await skipDraftPlan(currentDraftPlanId, user!.id);
+            }
+            if (currentTaskId && taskCreatedInFlow) {
+              await cleanupCreatedTask(currentTaskId);
+            }
+            setPlanModalOpen(false);
+            navigate('/documents');
+          } catch (failure: any) {
+            setError(`Failed to cancel preview flow cleanly: ${failure?.message || 'unknown error'}`);
+          } finally {
+            setPlanLoading(false);
           }
-          if (currentTaskId && taskCreatedInFlow) {
-            await cleanupCreatedTask(currentTaskId);
-          }
-          setPlanModalOpen(false);
-          navigate('/documents');
         }}
       />
     </div>

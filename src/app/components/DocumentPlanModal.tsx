@@ -36,7 +36,7 @@ export function DocumentPlanModal({
 }: DocumentPlanModalProps) {
   return (
     <Dialog open={open} onOpenChange={() => { if (!loading) void onCancel(); }}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-hidden">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>Extracted Task + AI Plan Preview</DialogTitle>
           <DialogDescription>
@@ -44,7 +44,7 @@ export function DocumentPlanModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 text-sm overflow-y-auto pr-2">
+        <div className="flex-1 min-h-0 space-y-4 text-sm overflow-y-auto pr-2">
           <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-2">
             <div><span className="text-gray-500">Title:</span> <span className="text-gray-900">{taskTitle || 'Untitled task'}</span></div>
             <div><span className="text-gray-500">Due:</span> <span className="text-gray-900">{taskDue || 'Not set'}</span></div>
