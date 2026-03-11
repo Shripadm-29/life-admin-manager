@@ -47,6 +47,7 @@ export function ReminderModal({
   const [values, setValues] = useState<ReminderFormValues>(defaultValues());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const isSubtaskReminder = reminder?.source === 'subtask';
 
   useEffect(() => {
     if (!isOpen) return;
@@ -58,8 +59,8 @@ export function ReminderModal({
     }
 
     setValues({
-      title: reminder.title,
-      description: reminder.description || '',
+      title: reminder.source === 'subtask' ? (reminder.description || reminder.title) : reminder.title,
+      description: reminder.source === 'subtask' ? (reminder.subtaskTitle || reminder.description || '') : (reminder.description || ''),
       remindAt: toLocalDateTime(reminder.remindAt),
       repeatType: reminder.repeatType,
       repeatIntervalDays: reminder.repeatIntervalDays,
@@ -106,6 +107,7 @@ export function ReminderModal({
       await onSave({
         ...values,
         title,
+        description: isSubtaskReminder ? (title || values.description) : values.description,
         remindAt: remindDate.toISOString(),
         repeatIntervalDays: values.repeatType === 'custom' ? values.repeatIntervalDays : null,
       });
@@ -122,7 +124,7 @@ export function ReminderModal({
       <div className="w-full max-w-lg bg-white rounded-xl shadow-2xl border border-gray-200">
         <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-900">
-            {reminder ? 'Edit Reminder' : 'Create Reminder'}
+            {reminder ? (isSubtaskReminder ? 'Edit AI Reminder' : 'Edit Reminder') : 'Create Reminder'}
           </h3>
           <button
             type="button"
@@ -138,26 +140,32 @@ export function ReminderModal({
           {error && <p className="text-sm text-red-600">{error}</p>}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{isSubtaskReminder ? 'Reminder Message' : 'Title'}</label>
             <input
               type="text"
               value={values.title}
               onChange={(event) => setField('title', event.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Reminder title"
+              placeholder={isSubtaskReminder ? 'Reminder message' : 'Reminder title'}
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <textarea
-              value={values.description}
-              onChange={(event) => setField('description', event.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              rows={3}
-              placeholder="Optional details"
-            />
-          </div>
+          {!isSubtaskReminder ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <textarea
+                value={values.description}
+                onChange={(event) => setField('description', event.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                rows={3}
+                placeholder="Optional details"
+              />
+            </div>
+          ) : (
+            <div className="text-xs text-gray-600 bg-blue-50 border border-blue-100 rounded-md px-3 py-2">
+              This reminder is linked to subtask: <span className="font-medium text-gray-800">{values.description || 'Unknown subtask'}</span>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Date & Time</label>
@@ -174,6 +182,7 @@ export function ReminderModal({
             <select
               value={values.repeatType}
               onChange={(event) => setField('repeatType', event.target.value as ReminderRepeatType)}
+              disabled={isSubtaskReminder}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               {repeatOptions.map((option) => (
@@ -197,21 +206,23 @@ export function ReminderModal({
             </div>
           )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Link to task (optional)</label>
-            <select
-              value={values.taskId || ''}
-              onChange={(event) => setField('taskId', event.target.value || null)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="">No linked task</option>
-              {tasks.map((task) => (
-                <option key={task.id} value={task.id}>
-                  {task.title}
-                </option>
-              ))}
-            </select>
-          </div>
+          {!isSubtaskReminder ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Link to task (optional)</label>
+              <select
+                value={values.taskId || ''}
+                onChange={(event) => setField('taskId', event.target.value || null)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">No linked task</option>
+                {tasks.map((task) => (
+                  <option key={task.id} value={task.id}>
+                    {task.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
 
           <label className="inline-flex items-center gap-2 text-sm text-gray-700">
             <input

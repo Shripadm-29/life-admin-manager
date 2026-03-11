@@ -1,39 +1,50 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router';
-import { Navigation } from '@/app/components/Navigation';
-import { useAuth } from '@/app/context/AuthContext';
 import { ArrowLeft, CheckCircle, Edit2 } from 'lucide-react';
-import { StatusMessage } from '@/app/components/ui/status-message';
-import { supabase } from '@/lib/supabaseClient';
-import { getPlanPreview, regeneratePlan, PlanItemType } from '@/lib/aiPlan';
+import { Navigation } from '@/app/components/Navigation';
 import { DocumentPlanModal } from '@/app/components/DocumentPlanModal';
-import {
-  planItemsToSteps,
-  saveDraftPlan,
-  acceptDraftPlan,
-  skipDraftPlan,
-} from '@/lib/taskPlanning';
+import { StatusMessage } from '@/app/components/ui/status-message';
+import { useAuth } from '@/app/context/AuthContext';
+import { ensureDocumentExtraction } from '@/lib/documentExtraction';
+import { generatePlan, regeneratePlan } from '@/lib/aiPlan';
+import { buildTaskPlanningContext } from '@/lib/planningContext';
+import { DocumentExtractionSummary, PlannerSubtask } from '@/lib/plannerTypes';
+import { supabase } from '@/lib/supabaseClient';
+import { acceptDraftPlan, saveDraftPlan, skipDraftPlan } from '@/lib/taskPlanning';
 
 export function AIExtraction() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const filename = location.state?.filename || 'document.pdf';
+  const documentId = location.state?.documentId;
 
   const [extractedTitle, setExtractedTitle] = useState('');
   const [extractedDate, setExtractedDate] = useState('');
+  const [extractedSummary, setExtractedSummary] = useState('');
+  const [documentHighlights, setDocumentHighlights] = useState<string[]>([]);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // modal states for plan preview
   const [planModalOpen, setPlanModalOpen] = useState(false);
-  const [planPreview, setPlanPreview] = useState<PlanItemType[]>([]);
+  const [planPreview, setPlanPreview] = useState<PlannerSubtask[]>([]);
   const [planLoading, setPlanLoading] = useState(false);
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
   const [currentDraftPlanId, setCurrentDraftPlanId] = useState<string | null>(null);
   const [taskCreatedInFlow, setTaskCreatedInFlow] = useState(false);
+
+  const inferCategoryFromText = (value: string) => {
+    const text = value.toLowerCase();
+    if (/invoice|bill|payment|tuition|fee|bank|tax|rent/.test(text)) return 'Finance';
+    if (/interview|resume|cv|job|career|internship|application/.test(text)) return 'Career';
+    if (/doctor|appointment|health|fitness|workout|medical/.test(text)) return 'Health';
+    if (/travel|trip|flight|hotel|itinerary/.test(text)) return 'Travel';
+    if (/project|proposal|milestone|deliverable/.test(text)) return 'Project';
+    if (/exam|homework|assignment|class|course|lecture|syllabus/.test(text)) return 'Academic';
+    return 'Personal';
+  };
 
   useEffect(() => {
     if (!user) {
@@ -41,28 +52,35 @@ export function AIExtraction() {
       return;
     }
 
-    // Simulate AI extraction
-    setLoading(true);
-    const t = setTimeout(() => {
-      // Mock extracted data based on filename
-      if (filename.toLowerCase().includes('assignment')) {
-        setExtractedTitle('Complete Assignment 3 - Data Structures');
-        setExtractedDate('2026-02-15');
-      } else if (filename.toLowerCase().includes('bill') || filename.toLowerCase().includes('invoice')) {
-        setExtractedTitle('Pay Utility Bill');
-        setExtractedDate('2026-02-10');
-      } else if (filename.toLowerCase().includes('syllabus')) {
-        setExtractedTitle('Midterm Exam - CS 201');
-        setExtractedDate('2026-03-15');
-      } else {
-        setExtractedTitle('Review Document: ' + filename);
-        setExtractedDate('2026-02-20');
-      }
-      setLoading(false);
-    }, 1000);
+    void (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        if (documentId) {
+          const extracted = await ensureDocumentExtraction(documentId);
+          setExtractedTitle(extracted.extracted_title || filename.replace(/\.[^.]+$/, ''));
+          setExtractedDate(extracted.extracted_due_date || '');
 
-    return () => clearTimeout(t);
-  }, [user, navigate, filename]);
+          const metadata = (extracted.metadata || {}) as DocumentExtractionSummary;
+          setExtractedSummary(metadata.summary || 'The document was processed and is ready for task planning.');
+          setDocumentHighlights([
+            ...(metadata.instructions || []).slice(0, 2),
+            ...(metadata.deliverables || []).slice(0, 2),
+            ...(metadata.deadlines || []).slice(0, 2),
+            ...(metadata.constraints || []).slice(0, 2),
+          ].filter(Boolean));
+        } else {
+          setExtractedTitle(filename.replace(/\.[^.]+$/, ''));
+          setExtractedSummary('No stored document record was found for this upload, so only the filename is available.');
+        }
+      } catch (failure) {
+        console.error(failure);
+        setError('Failed to extract document information.');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [user, navigate, filename, documentId]);
 
   if (!user) return null;
 
@@ -105,10 +123,11 @@ export function AIExtraction() {
         task = { ...task, due_date: extractedDate };
       }
     } else {
+      const inferredCategory = inferCategoryFromText(`${extractedTitle || ''} ${filename || ''}`);
       const payload = {
         title: extractedTitle || filename,
         due_date: extractedDate || null,
-        category: 'Academic',
+        category: inferredCategory,
         priority: 'medium',
         notes: null,
         source: 'document',
@@ -130,7 +149,7 @@ export function AIExtraction() {
           .insert({
             title: extractedTitle || filename,
             due_date: extractedDate || null,
-            category: 'Academic',
+            category: inferredCategory,
             priority: 'medium',
             notes: null,
             user_id: user!.id,
@@ -144,7 +163,6 @@ export function AIExtraction() {
       created = true;
     }
 
-    const documentId = location.state?.documentId;
     if (documentId) {
       const { error: docUpdateErr } = await supabase
         .from('documents')
@@ -169,6 +187,12 @@ export function AIExtraction() {
 
     await supabase
       .from('task_plans')
+      .delete()
+      .eq('task_id', taskId)
+      .eq('user_id', user!.id);
+
+    await supabase
+      .from('subtasks')
       .delete()
       .eq('task_id', taskId)
       .eq('user_id', user!.id);
@@ -203,10 +227,11 @@ export function AIExtraction() {
       const { task, created } = await createOrFindTask();
       setCurrentTaskId(task.id);
       setTaskCreatedInFlow(created);
-      const preview = await getPlanPreview(task.id);
-      const draft = await saveDraftPlan(task.id, user!.id, planItemsToSteps(preview));
+      const context = await buildTaskPlanningContext(task.id, user!.id);
+      const preview = await generatePlan(context);
+      const draft = await saveDraftPlan(task.id, user!.id, preview);
       setCurrentDraftPlanId(draft.id);
-      setPlanPreview(preview);
+      setPlanPreview(preview.plan);
       setPlanModalOpen(true);
     } catch (e) {
       console.error(e);
@@ -330,18 +355,18 @@ export function AIExtraction() {
                 Edit Full Task
               </button>
               <button
-                onClick={handleCreateTaskOnly}
-                disabled={actionLoading}
-                className={`px-4 py-2 border border-blue-600 text-blue-600 rounded-md transition-colors ${actionLoading ? 'opacity-50 pointer-events-none' : 'hover:bg-blue-50'}`}
-              >
-                {actionLoading ? 'Creating…' : 'Create Task'}
-              </button>
-              <button
                 onClick={handleGeneratePlan}
                 disabled={actionLoading || planLoading}
                 className={`px-4 py-2 bg-blue-600 text-white rounded-md transition-colors ${actionLoading || planLoading ? 'opacity-50 pointer-events-none' : 'hover:bg-blue-700'}`}
               >
-                {actionLoading || planLoading ? 'Generating…' : 'Create Task & Generate Plan'}
+                {actionLoading || planLoading ? 'Generating…' : 'Generate Plan Preview'}
+              </button>
+              <button
+                onClick={handleCreateTaskOnly}
+                disabled={actionLoading}
+                className={`px-4 py-2 border border-blue-600 text-blue-600 rounded-md transition-colors ${actionLoading ? 'opacity-50 pointer-events-none' : 'hover:bg-blue-50'}`}
+              >
+                {actionLoading ? 'Creating…' : 'Create Task Only'}
               </button>
             </div>
           </div>
@@ -352,7 +377,9 @@ export function AIExtraction() {
         open={planModalOpen}
         taskTitle={extractedTitle || filename}
         taskDue={extractedDate}
-        steps={planItemsToSteps(planPreview)}
+        extractedSummary={extractedSummary}
+        highlights={documentHighlights}
+        plan={planPreview}
         loading={planLoading}
         onCreateTaskAndPlan={async () => {
           if (currentTaskId && currentDraftPlanId) {
@@ -377,10 +404,11 @@ export function AIExtraction() {
         onRegenerate={async () => {
           if (currentTaskId) {
             setPlanLoading(true);
-            const preview = await regeneratePlan(currentTaskId);
-            const draft = await saveDraftPlan(currentTaskId, user!.id, planItemsToSteps(preview));
+            const context = await buildTaskPlanningContext(currentTaskId, user!.id);
+            const preview = await regeneratePlan(context);
+            const draft = await saveDraftPlan(currentTaskId, user!.id, preview);
             setCurrentDraftPlanId(draft.id);
-            setPlanPreview(preview);
+            setPlanPreview(preview.plan);
             setPlanLoading(false);
           }
         }}

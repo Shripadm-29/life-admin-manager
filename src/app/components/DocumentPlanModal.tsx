@@ -1,23 +1,34 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/app/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
+import { PlannerSubtask } from '@/lib/plannerTypes';
 
 interface DocumentPlanModalProps {
   open: boolean;
   loading?: boolean;
   taskTitle: string;
   taskDue?: string;
-  steps: string[];
+  extractedSummary?: string;
+  highlights?: string[];
+  plan: PlannerSubtask[];
   onCreateTaskAndPlan: () => Promise<void>;
   onCreateTaskOnly: () => Promise<void>;
   onRegenerate: () => Promise<void>;
   onCancel: () => Promise<void>;
 }
 
+const formatDateTime = (value?: string | null) => {
+  if (!value) return 'Not scheduled';
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+};
+
 export function DocumentPlanModal({
   open,
   loading = false,
   taskTitle,
   taskDue,
-  steps,
+  extractedSummary,
+  highlights = [],
+  plan,
   onCreateTaskAndPlan,
   onCreateTaskOnly,
   onRegenerate,
@@ -25,27 +36,56 @@ export function DocumentPlanModal({
 }: DocumentPlanModalProps) {
   return (
     <Dialog open={open} onOpenChange={() => { if (!loading) void onCancel(); }}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-hidden">
         <DialogHeader>
           <DialogTitle>Extracted Task + AI Plan Preview</DialogTitle>
+          <DialogDescription>
+            Review the extracted task info, specific subtasks, and reminder previews before saving.
+          </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 text-sm">
-          <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
+        <div className="space-y-4 text-sm overflow-y-auto pr-2">
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-2">
             <div><span className="text-gray-500">Title:</span> <span className="text-gray-900">{taskTitle || 'Untitled task'}</span></div>
             <div><span className="text-gray-500">Due:</span> <span className="text-gray-900">{taskDue || 'Not set'}</span></div>
-          </div>
-
-          <div className="rounded-md border border-blue-100 bg-blue-50 p-3">
-            <div className="font-medium text-blue-900 mb-2">Suggested AI plan</div>
-            {steps.length === 0 ? (
-              <p className="text-blue-700">No steps generated yet.</p>
-            ) : (
-              <ul className="list-disc ml-5 space-y-1 text-blue-900">
-                {steps.map((step, idx) => (
-                  <li key={`${idx}-${step}`}>{step}</li>
+            {extractedSummary ? <div className="text-gray-700">{extractedSummary}</div> : null}
+            {highlights.length ? (
+              <ul className="list-disc ml-5 space-y-1 text-gray-700">
+                {highlights.map((highlight) => (
+                  <li key={highlight}>{highlight}</li>
                 ))}
               </ul>
+            ) : null}
+          </div>
+
+          <div className="space-y-3">
+            {plan.length === 0 ? (
+              <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
+                <p className="text-blue-700">No plan items generated yet.</p>
+              </div>
+            ) : (
+              plan.map((item, idx) => (
+                <div key={`${idx}-${item.title}`} className="rounded-xl border border-blue-100 bg-blue-50 p-4 space-y-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div className="font-semibold text-blue-950">{item.title}</div>
+                    <div className="text-sm text-blue-800">{item.duration_minutes || 0} min</div>
+                  </div>
+                  {item.description ? <div className="text-sm text-blue-900">{item.description}</div> : null}
+                  <div className="text-sm text-blue-800">
+                    Suggested time: {formatDateTime(item.scheduled_start)} to {formatDateTime(item.scheduled_end)}
+                  </div>
+                  {item.reminders.length ? (
+                    <div className="rounded-lg border border-blue-100 bg-white/80 p-3 space-y-1">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-blue-700">Reminder Preview</div>
+                      {item.reminders.map((reminder) => (
+                        <div key={`${reminder.send_at}-${reminder.message}`} className="text-sm text-gray-700">
+                          {formatDateTime(reminder.send_at)}: {reminder.message}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ))
             )}
           </div>
         </div>
@@ -67,7 +107,7 @@ export function DocumentPlanModal({
           </button>
           <button
             onClick={() => void onCreateTaskAndPlan()}
-            disabled={loading || steps.length === 0}
+            disabled={loading || plan.length === 0}
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
           >
             Create Task + Plan
