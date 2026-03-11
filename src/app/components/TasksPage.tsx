@@ -63,12 +63,11 @@ export function TasksPage() {
             .from('documents')
             .select('task_id,file_path,created_at')
             .eq('user_id', user!.id)
-            .in('task_id', taskIds)
             .order('created_at', { ascending: false });
 
           if (!docsError) {
             const docMap = new Map<string, { names: string[]; latest: string | null }>();
-            for (const row of docs || []) {
+            for (const row of (docs || []).filter((doc: any) => doc.task_id && taskIds.includes(doc.task_id))) {
               const taskId = row.task_id;
               if (!taskId) continue;
               const current = docMap.get(taskId) || { names: [], latest: null };
