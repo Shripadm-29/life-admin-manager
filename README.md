@@ -1,5 +1,7 @@
 # Life Admin Manager
 
+Live App: https://www.lifeadminmanager.com
+
 Life Admin Manager is an AI-powered productivity app that helps users manage tasks, deadlines, and documents in one place. It can extract important information from uploaded documents and automatically generate detailed subtasks with smart scheduling.
 
 ---
@@ -24,7 +26,7 @@ https://www.figma.com/make/fUs0WP42uVXNU4H2XLZkuO/Life-Admin-Manager-UI-Design?t
 
 ## System Architecture / Tech Stack
 
-![Project Infrastructure Diagram](./path-to-your-image.png)
+![Project Infrastructure Diagram](https://github.com/Shripadm-29/life-admin-manager/blob/44d3c8f5dcc1d05c6a63a61bf74d9cd430ba0c4f/public/Architecture.jpg)
 
 ### Overview
 
