@@ -9,10 +9,12 @@ import { useNavigate } from 'react-router';
 vi.mock('@/app/context/AuthContext');
 vi.mock('react-router', { spy: true });
 
+// Main test suite for the Login component
 describe('Login Component', () => {
   const mockLogin = vi.fn();
   const mockNavigate = vi.fn();
 
+  // Setup mocks before each test
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(useAuth).mockReturnValue({
@@ -25,13 +27,16 @@ describe('Login Component', () => {
     vi.mocked(useNavigate).mockReturnValue(mockNavigate);
   });
 
+  // Test that the login form renders correctly
   it('should render login form with email and password fields', () => {
+    // Render component
     render(
       <BrowserRouter>
         <Login />
       </BrowserRouter>
     );
 
+    // Assert form fields presence
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /login/i })).toBeInTheDocument();
@@ -48,16 +53,20 @@ describe('Login Component', () => {
     expect(screen.getByText(/Sign in to your account/i)).toBeInTheDocument();
   });
 
+  // Test form submission with valid input
   it('should submit form with email and password', async () => {
+    // Setup mock response
     mockLogin.mockResolvedValue(true);
     const user = userEvent.setup();
 
+    // Render component
     render(
       <BrowserRouter>
         <Login />
       </BrowserRouter>
     );
 
+    // Trigger user input
     const emailInput = screen.getByLabelText(/email/i);
     const passwordInput = screen.getByLabelText(/password/i);
     const submitButton = screen.getByRole('button', { name: /login/i });
@@ -66,6 +75,7 @@ describe('Login Component', () => {
     await user.type(passwordInput, 'password123');
     await user.click(submitButton);
 
+    // Assert login call
     await waitFor(() => {
       expect(mockLogin).toHaveBeenCalledWith('test@example.com', 'password123');
     });

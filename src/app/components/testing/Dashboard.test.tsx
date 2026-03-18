@@ -53,6 +53,7 @@ const mockTasks = [
   },
 ];
 
+// Main test suite for the Dashboard component
 describe('Dashboard Component', () => {
   const mockUser = { id: 'user-123', email: 'test@example.com' };
   const mockNavigate = vi.fn();
@@ -66,6 +67,7 @@ describe('Dashboard Component', () => {
     }),
   };
 
+  // Setup mocks before each test
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(useAuth).mockReturnValue({
@@ -79,13 +81,16 @@ describe('Dashboard Component', () => {
     vi.mocked(supabaseModule.supabase, { partial: true }).from = mockSupabase.from;
   });
 
+  // Test that the dashboard title is rendered
   it('should render dashboard title', () => {
+    // Render component
     render(
       <BrowserRouter>
         <Dashboard />
       </BrowserRouter>
     );
 
+    // Assert title presence
     expect(screen.getByRole('heading', { level: 2, name: 'Dashboard' })).toBeInTheDocument();
   });
 
@@ -109,7 +114,9 @@ describe('Dashboard Component', () => {
     expect(screen.getByTestId('navigation')).toBeInTheDocument();
   });
 
+  // Test redirection when not authenticated
   it('should redirect to login if user is not authenticated', () => {
+    // Mock unauthenticated state
     vi.mocked(useAuth).mockReturnValue({
       user: null,
       login: vi.fn(),
@@ -118,22 +125,27 @@ describe('Dashboard Component', () => {
       error: null,
     } as any);
 
+    // Render component
     render(
       <BrowserRouter>
         <Dashboard />
       </BrowserRouter>
     );
 
+    // Assert redirection
     expect(mockNavigate).toHaveBeenCalledWith('/login');
   });
 
+  // Test total tasks count display
   it('should display total tasks count', async () => {
+    // Render component
     render(
       <BrowserRouter>
         <Dashboard />
       </BrowserRouter>
     );
 
+    // Assert count presence
     await waitFor(() => {
       expect(screen.getByText(/Total Tasks/i)).toBeInTheDocument();
     });

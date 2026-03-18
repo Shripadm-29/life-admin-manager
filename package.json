@@ -73,7 +73,7 @@
     "vaul": "1.1.2"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.3",
+    "@eslint/js": "^9.39.4",
     "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4",
     "@tailwindcss/vite": "4.1.12",
@@ -84,15 +84,14 @@
     "@vitest/browser": "^4.0.18",
     "@vitest/coverage-v8": "^4.0.18",
     "eslint": "^9.39.3",
-    "eslint-config-next": "^16.1.6",
-    "eslint-plugin-next": "^0.0.0",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.4.0",
     "happy-dom": "^20.8.3",
     "jsdom": "^28.1.0",
-    "next": "^16.1.6",
     "tailwindcss": "4.1.12",
-    "typescript-eslint": "^8.56.1",
+    "typescript-eslint": "^8.57.1",
     "vite": "^6.4.1",
     "vitest": "^4.0.18"
   },

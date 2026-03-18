@@ -41,6 +41,7 @@ const mockTasks = [
   },
 ];
 
+// Main test suite for the TasksPage component
 describe('TasksPage Component', () => {
   const mockUser = { id: 'user-123', email: 'test@example.com' };
   const mockNavigate = vi.fn();
@@ -67,6 +68,7 @@ describe('TasksPage Component', () => {
     },
   };
 
+  // Setup mocks before each test
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(useAuth).mockReturnValue({
@@ -80,13 +82,16 @@ describe('TasksPage Component', () => {
     vi.mocked(supabaseModule.supabase, { partial: true }).from = mockSupabase.from;
   });
 
+  // Test that the tasks page title is rendered
   it('should render tasks page title', () => {
+    // Render component
     render(
       <BrowserRouter>
         <TasksPage />
       </BrowserRouter>
     );
 
+    // Assert title presence
     expect(screen.getByRole('heading', { level: 2, name: 'Tasks' })).toBeInTheDocument();
   });
 
@@ -161,14 +166,16 @@ describe('TasksPage Component', () => {
     expect(document.body).toBeInTheDocument();
   });
 
+  // Test that tasks are loaded and displayed from supabase
   it('should display tasks from supabase', async () => {
+    // Render component
     render(
       <BrowserRouter>
         <TasksPage />
       </BrowserRouter>
     );
 
-    // Wait for tasks to load
+    // Assert tasks loading and display
     await waitFor(() => {
       mockTasks.forEach(task => {
         expect(screen.queryByText(task.title)).toBeInTheDocument();

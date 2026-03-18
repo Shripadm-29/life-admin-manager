@@ -11,10 +11,12 @@ vi.mock('@/app/context/AuthContext');
 vi.mock('react-router', { spy: true });
 vi.mock('@/lib/supabaseClient');
 
+// Main test suite for the TaskForm component
 describe('TaskForm Component', () => {
   const mockUser = { id: 'user-123', email: 'test@example.com' };
   const mockNavigate = vi.fn();
 
+  // Setup mocks before each test
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(useAuth).mockReturnValue({
@@ -28,13 +30,16 @@ describe('TaskForm Component', () => {
     vi.mocked(useParams).mockReturnValue({ id: undefined } as any);
   });
 
+  // Test that the task form renders with a title input
   it('should render task form with title input', () => {
+    // Render component
     render(
       <BrowserRouter>
         <TaskForm />
       </BrowserRouter>
     );
 
+    // Assert title input presence
     expect(screen.getByLabelText(/title/i)).toBeInTheDocument();
   });
 
@@ -87,18 +92,22 @@ describe('TaskForm Component', () => {
     expect(statusSelect.value).toBe('todo');
   });
 
+  // Test updating form fields
   it('should update form fields when user types', async () => {
     const user = userEvent.setup();
 
+    // Render component
     render(
       <BrowserRouter>
         <TaskForm />
       </BrowserRouter>
     );
 
+    // Trigger user input
     const titleInput = screen.getByLabelText(/title/i) as HTMLInputElement;
     await user.type(titleInput, 'New Task');
 
+    // Assert value update
     expect(titleInput.value).toBe('New Task');
   });
 

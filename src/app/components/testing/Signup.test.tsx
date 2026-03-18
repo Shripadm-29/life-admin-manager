@@ -9,10 +9,12 @@ import { useNavigate } from 'react-router';
 vi.mock('@/app/context/AuthContext');
 vi.mock('react-router', { spy: true });
 
+// Main test suite for the Signup component
 describe('Signup Component', () => {
   const mockSignup = vi.fn();
   const mockNavigate = vi.fn();
 
+  // Setup mocks before each test
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(useAuth).mockReturnValue({
@@ -25,13 +27,16 @@ describe('Signup Component', () => {
     vi.mocked(useNavigate).mockReturnValue(mockNavigate);
   });
 
+  // Test that the signup form renders correctly
   it('should render signup form with email, password, and confirm password fields', () => {
+    // Render component
     render(
       <BrowserRouter>
         <Signup />
       </BrowserRouter>
     );
 
+    // Assert form fields presence
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/^password$/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/confirm password/i)).toBeInTheDocument();
@@ -49,21 +54,26 @@ describe('Signup Component', () => {
     expect(screen.getByText(/Create your account/i)).toBeInTheDocument();
   });
 
+  // Test form submission with correct credentials
   it('should submit form with correct credentials', async () => {
+    // Setup mock response
     mockSignup.mockResolvedValue(true);
     const user = userEvent.setup();
 
+    // Render component
     render(
       <BrowserRouter>
         <Signup />
       </BrowserRouter>
     );
 
+    // Trigger user input
     await user.type(screen.getByLabelText(/email/i), 'newuser@example.com');
     await user.type(screen.getByLabelText(/^password$/i), 'password123');
     await user.type(screen.getByLabelText(/confirm password/i), 'password123');
     await user.click(screen.getByRole('button', { name: /sign up/i }));
 
+    // Assert signup call
     await waitFor(() => {
       expect(mockSignup).toHaveBeenCalledWith('newuser@example.com', 'password123', 'password123');
     });

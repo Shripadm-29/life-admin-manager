@@ -8,27 +8,31 @@ const mockPlanItems: PlanItemType[] = [
   {
     plannedFor: new Date(Date.now() + 3600000).toISOString(),
     durationMinutes: 60,
-    title: 'Read chapter 3',
+    plannerSubtask: 'Read chapter 3',
     checklist: ['Review key concepts', 'Take notes'],
   },
   {
     plannedFor: new Date(Date.now() + 7200000).toISOString(),
     durationMinutes: 45,
-    title: 'Complete practice problems',
+    plannerSubtask: 'Complete practice problems',
     checklist: ['Problems 1-10', 'Check answers'],
   },
 ];
 
+// Main test suite for the AIPlanModal component
 describe('AIPlanModal Component', () => {
   const mockOnAccept = vi.fn().mockResolvedValue(undefined);
   const mockOnRegenerate = vi.fn().mockResolvedValue(undefined);
   const mockOnClose = vi.fn();
 
+  // Reset mocks before each test
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
+  // Test that the modal is visible when open is true
   it('should render modal when open is true', () => {
+    // Render component
     render(
       <AIPlanModal
         open={true}
@@ -41,10 +45,13 @@ describe('AIPlanModal Component', () => {
       />
     );
 
+    // Assert visibility
     expect(screen.getByText(/AI suggested plan/i)).toBeInTheDocument();
   });
 
+  // Test that the modal is hidden when open is false
   it('should not render modal when open is false', () => {
+    // Render component
     render(
       <AIPlanModal
         open={false}
@@ -57,10 +64,13 @@ describe('AIPlanModal Component', () => {
       />
     );
 
+    // Assert invisibility
     expect(screen.queryByText(/AI suggested plan/i)).not.toBeInTheDocument();
   });
 
+  // Test that the task title is displayed correctly
   it('should display task title in modal header', () => {
+    // Render component
     render(
       <AIPlanModal
         open={true}
@@ -73,12 +83,16 @@ describe('AIPlanModal Component', () => {
       />
     );
 
+    // Assert title presence
     expect(screen.getByText(/Complete assignment/i)).toBeInTheDocument();
   });
 
+  // Test that the due date is displayed
   it('should display task due date when provided', () => {
+    // Set up data
     const dueDate = new Date('2025-12-25T14:30:00').toISOString();
 
+    // Render component
     render(
       <AIPlanModal
         open={true}
@@ -91,10 +105,13 @@ describe('AIPlanModal Component', () => {
       />
     );
 
+    // Assert due date text
     expect(screen.getByText(/Due/i)).toBeInTheDocument();
   });
 
+  // Test that all plan items are rendered
   it('should display all plan items', () => {
+    // Render component
     render(
       <AIPlanModal
         open={true}
@@ -107,6 +124,7 @@ describe('AIPlanModal Component', () => {
       />
     );
 
+    // Assert items rendered
     expect(screen.getByText(/Read chapter 3/i)).toBeInTheDocument();
     expect(screen.getByText(/Complete practice problems/i)).toBeInTheDocument();
   });
@@ -147,7 +165,9 @@ describe('AIPlanModal Component', () => {
     expect(screen.getByText(/Check answers/i)).toBeInTheDocument();
   });
 
+  // Test empty state
   it('should display empty state when no plan items', () => {
+    // Render component
     render(
       <AIPlanModal
         open={true}
@@ -160,6 +180,7 @@ describe('AIPlanModal Component', () => {
       />
     );
 
+    // Assert empty message
     expect(screen.getByText(/No plan items generated/i)).toBeInTheDocument();
   });
 
@@ -226,9 +247,11 @@ describe('AIPlanModal Component', () => {
       />
     );
 
+    // Trigger user input
     const acceptButton = screen.getByRole('button', { name: /Accept Plan/i });
     await user.click(acceptButton);
 
+    // Assert callback execution
     await waitFor(() => {
       expect(mockOnAccept).toHaveBeenCalledWith(mockPlanItems);
     });
