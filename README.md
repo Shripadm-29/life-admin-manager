@@ -2,6 +2,8 @@
 
 Live App: https://www.lifeadminmanager.com
 
+(Currently down, undergoing maintenanece) 
+
 Life Admin Manager is an AI-powered productivity app that helps users manage tasks, deadlines, and documents in one place. It can extract important information from uploaded documents and automatically generate detailed subtasks with smart scheduling.
 
 ---
