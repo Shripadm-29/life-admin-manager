@@ -53,7 +53,17 @@ describe('Login Component', () => {
     expect(screen.getByText(/Sign in to your account/i)).toBeInTheDocument();
   });
 
-  // Test form submission with valid input
+  it('should hide Google sign-in option', () => {
+    render(
+      <BrowserRouter>
+        <Login />
+      </BrowserRouter>
+    );
+
+    expect(screen.queryByRole('button', { name: /sign in with google/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/or continue with/i)).not.toBeInTheDocument();
+  });
+
   it('should submit form with email and password', async () => {
     // Setup mock response
     mockLogin.mockResolvedValue(true);
